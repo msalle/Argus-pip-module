@@ -33,15 +33,18 @@ import org.glite.authz.pep.pip.PolicyInformationPoint;
 import org.ini4j.Ini;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import org.bouncycastle.x509.X509Attribute;
+import eu.emi.security.authn.x509.proxy.OidAndValue;
 /**
  * Created by rens on 9-2-16.
  */
+@SuppressWarnings("unused")
 public class RensX509PIPIniConfigurationParser implements IniSectionConfigurationParser<PolicyInformationPoint>{
 
     /** Class logger. */
     private Logger log= LoggerFactory.getLogger(RensX509PIPIniConfigurationParser.class);
-
+    
+    
    
     /** {@inheritDoc} */
     public PolicyInformationPoint parse(Ini.Section iniConfig, AbstractConfigurationBuilder<?> configBuilder) throws ConfigurationException {
@@ -49,8 +52,8 @@ public class RensX509PIPIniConfigurationParser implements IniSectionConfiguratio
     	String pipid= iniConfig.getName();
 
         RensX509PIP pip= new RensX509PIP(pipid);
+     
         return pip;
-   
     }
 
     
