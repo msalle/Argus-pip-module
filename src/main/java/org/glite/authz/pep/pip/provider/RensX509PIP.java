@@ -24,7 +24,6 @@ package org.glite.authz.pep.pip.provider;
 import org.glite.authz.common.model.Attribute;
 import org.glite.authz.common.model.Request;
 import org.glite.authz.common.model.Subject;
-import org.glite.authz.common.profile.GLiteAuthorizationProfileConstants;
 import org.glite.authz.common.util.LazyList;
 import org.glite.authz.pep.pip.PIPProcessingException;
 import org.slf4j.Logger;
@@ -33,50 +32,23 @@ import java.util.Set;
 
 import javax.security.cert.X509Certificate;
 
-import org.apache.commons.ssl.X509CertificateChainBuilder;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x509.PolicyInformation;
-import org.bouncycastle.asn1.x509.X509Extension;
-import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.jce.provider.X509CertParser;
+import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.jce.provider.X509CertificateObject;
-import org.bouncycastle.openssl.PEMReader;
-import org.bouncycastle.util.io.pem.PemObject;
-import org.glite.authz.common.model.Action;
-import org.glite.authz.common.model.Attribute;
-import org.glite.authz.common.model.Environment;
-import org.glite.authz.common.model.Request;
-import org.glite.authz.common.model.Resource;
-import org.glite.authz.common.model.Subject;
-import org.glite.authz.common.model.util.Strings;
-import org.glite.authz.pep.pip.PIPProcessingException;
-
-import eu.emi.security.authn.x509.helpers.FlexiblePEMReader;
-import eu.emi.security.authn.x509.helpers.ReaderInputStream;
 import eu.emi.security.authn.x509.helpers.pkipath.NonValidatingCertPathBuilder;
-import eu.emi.security.authn.x509.helpers.pkipath.bc.CertPathValidatorUtilities;
 import eu.emi.security.authn.x509.impl.CertificateUtils;
 import eu.emi.security.authn.x509.impl.CertificateUtils.Encoding;
-import eu.emi.security.authn.x509.impl.OpensslNameUtils;
-import eu.emi.security.authn.x509.impl.PEMCredential;
-import eu.emi.security.authn.x509.proxy.ProxyChainInfo;
 import eu.emi.security.authn.x509.proxy.ProxyUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInput;
-import java.io.ObjectInputStream;
-import java.io.StringReader;
-import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStoreException;
-import java.security.Policy;
-import java.security.cert.CertPathValidator;
 import java.security.cert.CertificateException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -131,10 +103,10 @@ public class RensX509PIP extends AbstractPolicyInformationPoint {
 	}
 	
 	private List<String> getOIDPolicies(java.security.cert.X509Certificate cert){
-		 X509CertificateObject eec = (X509CertificateObject)cert;
+//X509CertificateObject eec = (X509CertificateObject)cert;
 		 List<String> policy = new LazyList<String>();
 		 
-		byte[] extvalue = eec.getExtensionValue(X509Extension.certificatePolicies.toString());
+		byte[] extvalue = cert.getExtensionValue(Extension.certificatePolicies.toString());
 
 		if(extvalue == null){
 			log.debug("EXTvalue = {}", extvalue);
@@ -149,7 +121,8 @@ public class RensX509PIP extends AbstractPolicyInformationPoint {
 			
 			/* Loop over all policy OIDs */
 		    for (int pos=0; pos<seq.size(); pos++) {
-		        PolicyInformation pol = new PolicyInformation((ASN1Sequence)seq.getObjectAt(pos));
+		        //PolicyInformation pol = new PolicyInformation((ASN1Sequence)seq.getObjectAt(pos));
+		    	PolicyInformation pol =  PolicyInformation.getInstance(seq.getObjectAt(pos));
 		        policy.add(pol.getPolicyIdentifier().getId());
 		        log.debug("quatro Policy: {}", policy);
 //		        System.out.println("Found policy: "+policy); // adapt as needed...
