@@ -1,4 +1,4 @@
-// Copyright (c) FOM-Nikhef 2015-2016
+// Copyright (c) FOM-Nikhef 2016-
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 // Authors:
-// 2015-2016
+// 2016-
 // Rens Visser <rensv@nikhef.nl>
 // NIKHEF Amsterdam, the Netherlands
 // <grid-mw-security@nikhef.nl>
@@ -27,10 +27,13 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+
 import java.nio.charset.StandardCharsets;
+
 import java.security.KeyStoreException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -45,6 +48,7 @@ import org.glite.authz.common.model.Request;
 import org.glite.authz.common.model.Resource;
 import org.glite.authz.common.model.Subject;
 import org.glite.authz.pep.pip.PIPProcessingException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,20 +63,34 @@ import eu.emi.security.authn.x509.proxy.ProxyUtils;
 /**
  * @author Rens Visser
  * 
- *         The X509PIPPolicyOIDExtractor PIP extracts Policy OIDs from incoming
- *         authorization requests. After extracting a XACML request is generated
- *         and send to the PEPD.
+ *         The IGTF PIP extracts the issuer DN from the incomming request. IT
+ *         then searches all info files to find the required info file(s).
  */
 public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	/** Class logger. */
 	private final Logger log = LoggerFactory.getLogger(IgtfStuffPIP.class);
 
 	private final static String INFO_FILE_LOCATION = "/etc/grid-security/certificates/";
-	public final static String ATTRIBUTE_IDENTIFIER = "http://example.org/xacml/subject/ca-policy-names";
+	private final static String ATTRIBUTE_IDENTIFIER = "http://example.org/xacml/subject/ca-policy-names";
 
+	/**
+	 * Contains a string of the certificate issuer DN.
+	 */
 	private static String CertificateIssuerDN;
+
+	/**
+	 * Contains all info files
+	 */
 	private static List<String> infoFilesAll = new ArrayList<String>();
+
+	/**
+	 * List of .info files to return.
+	 */
 	private static List<String> infoFilesToReturn = new ArrayList<String>();
+
+	/**
+	 * Contains the content of matching .info files.
+	 */
 	private static List<String> infoFilesContents = new ArrayList<String>();
 
 	/**
@@ -87,26 +105,31 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 
 	/** {@inheritDoc} */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
+		boolean toApply = false;
 		try {
-			int i = 0;
+			//Make the request editable and readable in other java code.
 			Set<Subject> subjects = request.getSubjects();
-			setIssuerDNCertificate(urlDecodeIssuerDNCertificate(getIssuerDNCertificateFromIncommingRequest(request)));
+			//Get the Certificate issuer DN and store it in a class wide variable.
+			CertificateIssuerDN = urlDecodeIssuerDNCertificate(getIssuerDNCertificateFromIncommingRequest(request));
 
-			if (getIssuerDNCertificate().contains("failed") == false) {
+			if (CertificateIssuerDN.contains("failed") == false) {
+				toApply = true;
+				//find ALL .info files.
 				findAllInfoFiles();
 
+				//Start iteration to find correct info files.
 				for (Subject subject : subjects) {
-					Attribute policyInformation = new Attribute(getATTRIBUTE_IDENTIFIER());
+					//Create the attributes to be send to PEPD.
+					Attribute policyInformation = new Attribute(ATTRIBUTE_IDENTIFIER);
 					policyInformation.setDataType(Attribute.DT_STRING);
 
-					for (i = 0; i < infoFilesAll.size(); i++) {
+					for (int i = 0; i < infoFilesAll.size(); i++) {
 						assuranceFileCheck(infoFilesAll.get(i));
 
-						if (infoFilesContents.get(i).contains(getIssuerDNCertificate()) == true) {
+						if (infoFilesContents.get(i).contains(CertificateIssuerDN) == true) {
 							policyInformation.getValues().add(infoFilesAll.get(i).replace(".info", ""));
 						}
 					}
-
 					subject.getAttributes().add(policyInformation);
 				}
 			}
@@ -116,7 +139,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 			e.printStackTrace();
 		}
 
-		return true;
+		return toApply;
 	}
 
 	/**
@@ -126,7 +149,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *            The String to encode
 	 * @return The encoded string
 	 */
-	private String urlEncodeIssuerDNCertificate(String urlToEncode) {
+	private static String urlEncodeIssuerDNCertificate(String urlToEncode) {
 		StringBuilder strBuilder = new StringBuilder();
 
 		urlToEncode = urlToEncode.replace("#", "%23");
@@ -143,7 +166,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *            The String to decode
 	 * @return The decoded string
 	 */
-	private String urlDecodeIssuerDNCertificate(String urlToDecode) {
+	private static String urlDecodeIssuerDNCertificate(String urlToDecode) {
 		StringBuilder strBuilder = new StringBuilder();
 
 		urlToDecode = urlToDecode.replace("%23", "#");
@@ -157,14 +180,14 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 * Adds all .info files from the grid-security/certifiactes folder
 	 */
 	private void findAllInfoFiles() {
-		File folder = new File(getInfoFileLocation());
+		File folder = new File(INFO_FILE_LOCATION);
 		File[] listOfFiles = folder.listFiles();
 		String extension = null;
 
 		for (File file : listOfFiles) {
 			extension = file.getName().substring(file.getName().lastIndexOf(".") + 1, file.getName().length());
 			if (file.isFile() && extension.equals("info")) {
-				addToAllInfoFiles(file.getName());
+				infoFilesAll.add(file.getName());
 			}
 		}
 	}
@@ -205,7 +228,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 */
 	private void assuranceFileCheck(String fileName) throws IOException {
 		StringBuilder stringBuilder = new StringBuilder();
-		BufferedReader br = new BufferedReader(new FileReader(getInfoFileLocation() + fileName));
+		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
 		String line;
 		int firstQuotePos = 0, nextQuotePos = 0;
 
@@ -237,7 +260,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 			nextQuotePos = 0;
 		}
 
-		infoFilesContents(urlDecodeIssuerDNCertificate(stringBuilder.toString()));
+		infoFilesContents.add(urlDecodeIssuerDNCertificate(stringBuilder.toString()));
 		br.close();
 	}
 
@@ -284,77 +307,5 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 		}
 
 		return toReturn;
-	}
-
-	/**
-	 * Setter method to set contents of @infoFilesContents identifier.
-	 * 
-	 * @param contentToAdd
-	 *            - Input String of content to add
-	 * @return void
-	 */
-	private void infoFilesContents(String contentToAdd) {
-		infoFilesContents.add(contentToAdd);
-	}
-
-	/**
-	 * Setter method to set contents of @FilesAll identifier.
-	 * 
-	 * @param infoFile
-	 *            - Input String of info file name
-	 * @return void
-	 */
-	private void addToAllInfoFiles(String infoFile) {
-		infoFilesAll.add(new String(infoFile));
-	}
-
-	/**
-	 * Setter method to set contents of @infoFile identifier.
-	 * 
-	 * @param infoFile
-	 *            - Input String of info file name
-	 * @return void
-	 */
-	private void infoFilesToReturn(String infoFile) {
-		infoFilesToReturn.add(infoFile);
-	}
-
-	/**
-	 * Setter method to set contents of @CertificateIssuerDN identifier.
-	 * 
-	 * @param inputString
-	 *            - String for input
-	 * @return void
-	 */
-	private void setIssuerDNCertificate(String inputString) {
-		CertificateIssuerDN = inputString;
-	}
-
-	/**
-	 * Getter method to get contents of @CertificateIssuerDN identifier.
-	 * 
-	 * @return a {@link String}
-	 */
-	private String getIssuerDNCertificate() {
-		return CertificateIssuerDN;
-	}
-
-	/**
-	 * Getter method to get contents of @INFO_FILE_LOCATION identifier.
-	 * 
-	 * @return a {@link String}
-	 */
-	private String getInfoFileLocation() {
-		return INFO_FILE_LOCATION;
-	}
-
-	/**
-	 * Getter method to get contents of @ATTRIBUTE_IDENTIFIER identifier.
-	 * 
-	 * @return a {@link String}
-	 */
-	public String getATTRIBUTE_IDENTIFIER() {
-		return ATTRIBUTE_IDENTIFIER;
-
 	}
 }

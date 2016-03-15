@@ -60,8 +60,8 @@ import java.util.List;
  *         and send to the PEPD.
  */
 public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
-	/** 
-	 * Class logger used for debugging. 
+	/**
+	 * Class logger used for debugging.
 	 */
 	private final Logger log = LoggerFactory.getLogger(ExtractorX509GenericPIP.class);
 
@@ -87,15 +87,15 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 *
 	 * @param pipid
 	 *            The PIP identifier name
-	 * @throws Exception 
+	 * @throws Exception
 	 */
 	public ExtractorX509GenericPIP(String pipid, String[] acceptedAttributes) throws Exception {
 		super(pipid);
 
-		if(acceptedAttributes.length == 0){
+		if (acceptedAttributes.length == 0) {
 			throw new Exception("No accepted attributes have been supplied.");
 		}
-		
+
 		acceptedAttributes_ = acceptedAttributes;
 	}
 
@@ -103,54 +103,56 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	public boolean populateRequest(Request request) throws PIPProcessingException {
 		X509Certificate cert = null;
 		boolean toApplyPIP = false;
-		
-		if(request.getSubjects().isEmpty()){
+
+		if (request.getSubjects().isEmpty()) {
 			log.debug("Request is empty!");
 		} else {
 			toApplyPIP = true;
 		}
 		Set<Subject> subjects = request.getSubjects();
-		
 
 		try {
 
-			for (Subject subject : subjects) {
-				String acceptedID = null;
-				Attribute caPolicyOIDsInformation = new Attribute(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID);
-				caPolicyOIDsInformation.setDataType(Attribute.DT_STRING);
+			if (toApplyPIP == true) {
 
-				Attribute issuerDNInformation = new Attribute(ATTRIBUTE_SUBJECT_X509_ISSUER);
-				issuerDNInformation.setDataType(Attribute.DT_STRING);
-				
-				//Get the end-entity X509 certificate.
-				cert = ProxyUtils
-						.getEndUserCertificate(AttributeToX509CertificateChain(subject.getAttributes(), "Subject"));
+				for (Subject subject : subjects) {
+					String acceptedID = null;
+					Attribute caPolicyOIDsInformation = new Attribute(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID);
+					caPolicyOIDsInformation.setDataType(Attribute.DT_STRING);
 
-				//Loop over each accepted attribute .
-				for (int i = 0; i < acceptedAttributes_.length; i++) {
-					acceptedID = acceptedAttributes_[i];
-					
-					//Check if its an CA policy oid
-					if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID)) {
-						List<String> policyOIDs = getPolicyOIDs(cert);
+					Attribute issuerDNInformation = new Attribute(ATTRIBUTE_SUBJECT_X509_ISSUER);
+					issuerDNInformation.setDataType(Attribute.DT_STRING);
 
-						for (String str : policyOIDs) {
-							caPolicyOIDsInformation.getValues().add(str);
+					// Get the end-entity X509 certificate.
+					cert = ProxyUtils
+							.getEndUserCertificate(AttributeToX509CertificateChain(subject.getAttributes(), "Subject"));
+
+					// Loop over each accepted attribute .
+					for (int i = 0; i < acceptedAttributes_.length; i++) {
+						acceptedID = acceptedAttributes_[i];
+
+						// Check if its an CA policy oid
+						if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID)) {
+							List<String> policyOIDs = getPolicyOIDs(cert);
+
+							for (String str : policyOIDs) {
+								caPolicyOIDsInformation.getValues().add(str);
+							}
+							subject.getAttributes().add(caPolicyOIDsInformation);
+
+							// Check if its an Issuer DN
+						} else if (acceptedID.equals(ATTRIBUTE_SUBJECT_X509_ISSUER)) {
+							String str = cert.getIssuerX500Principal().getName();
+							issuerDNInformation.getValues().add(OpensslNameUtils.convertFromRfc2253(str, false));
+							subject.getAttributes().add(issuerDNInformation);
+							// If none of the above, abort!
+						} else {
+							throw new Exception("Accepted ID is non existent, non ca policy or non issuer DN");
 						}
-						subject.getAttributes().add(caPolicyOIDsInformation);
-						
-					//Check if its an Issuer DN	
-					} else if (acceptedID.equals(ATTRIBUTE_SUBJECT_X509_ISSUER)) {
-						String str = cert.getIssuerX500Principal().getName();
-						issuerDNInformation.getValues().add(OpensslNameUtils.convertFromRfc2253(str, false));
-						subject.getAttributes().add(issuerDNInformation);
-					//If none of the above, abort!
-					}else {
-						throw new Exception("Accepted ID is non existent, non ca policy or non issuer DN");
+
 					}
 
 				}
-
 			}
 		} catch (CertificateException e) {
 			// TODO Auto-generated catch block
@@ -182,7 +184,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @return a List<String> instance
 	 * @throws IOException
 	 */
-	@SuppressWarnings("resource") //Added to restrict unmeaningfull errors
+	@SuppressWarnings("resource") // Added to restrict unmeaningfull errors
 	private List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
 		List<String> oidList = new LazyList<String>();
 		//
