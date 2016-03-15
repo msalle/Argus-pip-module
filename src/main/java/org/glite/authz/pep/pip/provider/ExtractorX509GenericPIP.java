@@ -102,8 +102,15 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	/** {@inheritDoc} */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
 		X509Certificate cert = null;
-
+		boolean toApplyPIP = false;
+		
+		if(request.getSubjects().isEmpty()){
+			log.debug("Request is empty!");
+		} else {
+			toApplyPIP = true;
+		}
 		Set<Subject> subjects = request.getSubjects();
+		
 
 		try {
 
@@ -162,8 +169,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 			log.debug(e.getMessage());
 			e.printStackTrace();
 		}
-		// return true;
-		return true;
+		return toApplyPIP;
 	}
 
 	/**
