@@ -1,4 +1,4 @@
-//# Copyright (c) FOM-Nikhef 2015-
+//# Copyright (c) FOM-Nikhef 2016-
 //# 
 //# Licensed under the Apache License, Version 2.0 (the "License");
 //# you may not use this file except in compliance with the License.
@@ -78,15 +78,6 @@ public class ExtractorX509GenericPIPIniConfigurationParser
 		if (valuesList == null) {
 			return null;
 		}
-
-		ArrayList<String> values = new ArrayList<String>();
-		for (String value : valuesList.split(" ")) {
-			String trimmedValue = Strings.safeTrimOrNullString(value);
-			if (trimmedValue != null) {
-				values.add(trimmedValue);
-			}
-		}
-
-		return values.toArray(new String[values.size()]);
+		return valuesList.trim().split("\\s");
 	}
 }

@@ -107,19 +107,20 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	public boolean populateRequest(Request request) throws PIPProcessingException {
 		boolean toApply = false;
 		try {
-			//Make the request editable and readable in other java code.
+			// Make the request editable and readable in other java code.
 			Set<Subject> subjects = request.getSubjects();
-			//Get the Certificate issuer DN and store it in a class wide variable.
+			// Get the Certificate issuer DN and store it in a class wide
+			// variable.
 			CertificateIssuerDN = urlDecodeIssuerDNCertificate(getIssuerDNCertificateFromIncommingRequest(request));
 
 			if (CertificateIssuerDN.contains("failed") == false) {
 				toApply = true;
-				//find ALL .info files.
+				// find ALL .info files.
 				findAllInfoFiles();
 
-				//Start iteration to find correct info files.
+				// Start iteration to find correct info files.
 				for (Subject subject : subjects) {
-					//Create the attributes to be send to PEPD.
+					// Create the attributes to be send to PEPD.
 					Attribute policyInformation = new Attribute(ATTRIBUTE_IDENTIFIER);
 					policyInformation.setDataType(Attribute.DT_STRING);
 
@@ -227,11 +228,14 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *             Throws an exception when the file can't be passed.
 	 */
 	private void assuranceFileCheck(String fileName) throws IOException {
+		//String builder, used to build the return string.
 		StringBuilder stringBuilder = new StringBuilder();
+		//Open required info file.
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
 		String line;
 		int firstQuotePos = 0, nextQuotePos = 0;
 
+		//Loop where the return string is build in.
 		while ((line = br.readLine()) != null) {
 			if (checkStartsWithHashtag(line) == true) {
 				continue;
@@ -305,7 +309,6 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 				break;
 			}
 		}
-
 		return toReturn;
 	}
 }
