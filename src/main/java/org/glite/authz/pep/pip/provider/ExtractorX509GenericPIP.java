@@ -57,7 +57,7 @@ import java.util.List;
  *         authorization requests. After extracting a XACML request is generated
  *         and send to the PEPD.
  */
-public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint  {
+public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	/**
 	 * Class logger used for debugging.
 	 */
@@ -77,10 +77,14 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint  {
 	public final static String ATTRIBUTE_SUBJECT_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
 	/**
-	 * Constructor.
+	 * Constructor. if acceptedAttributes is filled, then it makes the local variable available to the whole class.
+	 * If acceptedAttributes is empty, an Exception is thrown and the PIP will not run.
 	 *
 	 * @param pipid
 	 *            The PIP identifier name
+	 * 
+	 * @param acceptedAttributes
+	 *            String array of accepted attributes.
 	 * @throws Exception
 	 */
 	public ExtractorX509GenericPIP(String pipid, String[] acceptedAttributes) {
@@ -99,9 +103,9 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint  {
 		// boolean toApplyPIP = true;
 		Set<Subject> subjects = request.getSubjects();
 		Set<Attribute> subjectAttributes = null;
-		
+
 		int debugI = 0;
-		
+
 		if (subjects.isEmpty()) {
 			log.debug("Request has no subject!");
 			return false;
@@ -119,8 +123,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint  {
 				issuerDNInformation.setDataType(Attribute.DT_STRING);
 
 				// Get the end-entity X509 certificate.
-				cert = ProxyUtils
-						.getEndUserCertificate(findPEMAttributeForConverson(subjectAttributes, "Subject"));
+				cert = ProxyUtils.getEndUserCertificate(findPEMAttributeForConverson(subjectAttributes, "Subject"));
 
 				// Loop over each accepted attribute .
 				for (int i = 0; i < acceptedAttributes_.length; i++) {
@@ -163,14 +166,14 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint  {
 	 * @param cert
 	 *            The x509Certificate where the Policy OID(s) are extracted
 	 *            from.
-	 * @return a List<String> instance
+	 * @return a List<String> instance. The list is filled with Policy OIDs strings.
 	 * @throws IOException
 	 */
 	@SuppressWarnings("resource") // Added to restrict umeaningful errors
 	private List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
 		List<String> oidList = new LazyList<String>();
 		StringBuilder debugSTR = new StringBuilder();
-		
+
 		byte[] extvalue = cert.getExtensionValue(Extension.certificatePolicies.toString());
 
 		if (extvalue == null) {
@@ -187,19 +190,20 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint  {
 		for (int pos = 0; pos < seq.size(); pos++) {
 			if (PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId() != null) {
 				oidList.add(PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId());
-				debugSTR.append(PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId() + "/r");
+				debugSTR.append(
+						PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId() + "/r");
 			} else {
 				throw new IOException("Policy does not exist!");
 			}
 		}
-		
+
 		log.debug("Found policies: {}", debugSTR.toString());
 		return oidList;
 	}
 
 	/**
-	 * Converts a PEM formatted String to a {@link X509Certificate} instances
-	 * array.
+	 * Creates a X509Certificate chain from a Attribute indicated by element
+	 * from a Set of Attributes. Does this by finding the Attribute corresponding to the element.
 	 *
 	 * @param attributes
 	 *            A {@link Set} filled with {@link Attribute}
@@ -235,7 +239,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint  {
 	 *
 	 * @param pem
 	 *            A PEM formatted String
-	 * @return a PemObject instance
+	 * @return a X509Certificate[] chain
 	 */
 	public static X509Certificate[] pemConvertToX509CertificateChain(String pem)
 			throws CertificateException, IOException, KeyStoreException {
