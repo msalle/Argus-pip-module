@@ -71,7 +71,8 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	private final Logger log = LoggerFactory.getLogger(IgtfStuffPIP.class);
 
 	private final static String INFO_FILE_LOCATION = "/etc/grid-security/certificates/";
-	private final static String ATTRIBUTE_IDENTIFIER = "http://example.org/xacml/subject/ca-policy-names";
+	private final static String ATTRIBUTE_IDENTIFIER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
+	private final static String POPULATE_REQUEST_ATTRIBUTE_IDENTIFIER = "http://authz-interop.org/xacml/subject/ca-policy-names";
 
 	/**
 	 * Contains a string of the certificate issuer DN.
@@ -79,19 +80,9 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	private static String CertificateIssuerDN;
 
 	/**
-	 * Contains all info files
-	 */
-	private static List<String> infoFilesAll = new ArrayList<String>();
-
-	/**
 	 * List of .info files to return.
 	 */
 	private static List<String> infoFilesToReturn = new ArrayList<String>();
-
-	/**
-	 * Contains the content of matching .info files.
-	 */
-	private static List<String> infoFilesContents = new ArrayList<String>();
 
 	/**
 	 * The constructor
@@ -101,6 +92,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 */
 	public IgtfStuffPIP(String pipid) {
 		super(pipid);
+
 	}
 
 	/** {@inheritDoc} */
@@ -109,34 +101,40 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 		try {
 			// Make the request editable and readable in other java code.
 			Set<Subject> subjects = request.getSubjects();
-			// Get the Certificate issuer DN and store it in a class wide
-			// variable.
-			CertificateIssuerDN = urlDecodeIssuerDNCertificate(getIssuerDNCertificateFromIncommingRequest(request));
+			// find ALL .info files.
+			List<String> infoFilesAll = findAllInfoFiles();
+			List<String> infoFilesContents = null;
+			String file = null;
 
-			if (CertificateIssuerDN.contains("failed") == false) {
-				toApply = true;
-				// find ALL .info files.
-				findAllInfoFiles();
+			// Start iteration to find correct info files.
+			for (Subject subject : subjects) {
+				CertificateIssuerDN = urlDecode(getIssuerDNFromSubject(subject));
+				if (CertificateIssuerDN == null) {
+					log.debug("Certificate issuer with DN " + CertificateIssuerDN + " does not exist.");
+					continue;
+				}
 
-				// Start iteration to find correct info files.
-				for (Subject subject : subjects) {
-					// Create the attributes to be send to PEPD.
-					Attribute policyInformation = new Attribute(ATTRIBUTE_IDENTIFIER);
-					policyInformation.setDataType(Attribute.DT_STRING);
+				// Create the attributes to be send to PEPD.
+				Attribute policyInformation = new Attribute(POPULATE_REQUEST_ATTRIBUTE_IDENTIFIER);
+				policyInformation.setDataType(Attribute.DT_STRING);
 
-					for (int i = 0; i < infoFilesAll.size(); i++) {
-						assuranceFileCheck(infoFilesAll.get(i));
+				
+				for (int i = 0; i < infoFilesAll.size(); i++) {
+					file = infoFilesAll.get(i);
+					infoFilesContents = assuranceFileCheck(file);
 
-						if (infoFilesContents.get(i).contains(CertificateIssuerDN) == true) {
-							policyInformation.getValues().add(infoFilesAll.get(i).replace(".info", ""));
+					for (int j = 0; j < infoFilesContents.size(); j++){
+						if (infoFilesContents.get(j).contains(CertificateIssuerDN) == true) {
+							policyInformation.getValues().add(file.replace(".info", ""));
+							toApply = true;
 						}
 					}
-					subject.getAttributes().add(policyInformation);
+					
 				}
+				subject.getAttributes().add(policyInformation);
 			}
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
+
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
@@ -150,7 +148,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *            The String to encode
 	 * @return The encoded string
 	 */
-	private static String urlEncodeIssuerDNCertificate(String urlToEncode) {
+	private static String urlEncode(String urlToEncode) {
 		StringBuilder strBuilder = new StringBuilder();
 
 		urlToEncode = urlToEncode.replace("#", "%23");
@@ -167,12 +165,14 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *            The String to decode
 	 * @return The decoded string
 	 */
-	private static String urlDecodeIssuerDNCertificate(String urlToDecode) {
+	private static String urlDecode(String urlToDecode) {
 		StringBuilder strBuilder = new StringBuilder();
 
 		urlToDecode = urlToDecode.replace("%23", "#");
 		urlToDecode = urlToDecode.replace("%22", "\"");
 		urlToDecode = urlToDecode.replace("%5c", "\\");
+
+		// (char)Integer.parseInt(urlToDecode, 16);
 
 		return urlToDecode;
 	}
@@ -180,17 +180,24 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	/**
 	 * Adds all .info files from the grid-security/certifiactes folder
 	 */
-	private void findAllInfoFiles() {
+	private List<String> findAllInfoFiles() {
 		File folder = new File(INFO_FILE_LOCATION);
 		File[] listOfFiles = folder.listFiles();
 		String extension = null;
+		List<String> infoFilesAll = new ArrayList<String>();
+		String fileName = null;
 
 		for (File file : listOfFiles) {
-			extension = file.getName().substring(file.getName().lastIndexOf(".") + 1, file.getName().length());
-			if (file.isFile() && extension.equals("info")) {
-				infoFilesAll.add(file.getName());
+			fileName = file.getName();
+
+			if (file.isFile()) {
+				extension = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length());
+				if (extension.equals("info")) {
+					infoFilesAll.add(fileName);
+				}
 			}
 		}
+		return infoFilesAll;
 	}
 
 	/**
@@ -201,21 +208,20 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *            The request where the issuer DN is extracted from. from.
 	 * @return A string with "failed" or the issuer DN.
 	 */
-	private String getIssuerDNCertificateFromIncommingRequest(Request req) {
+	private String getIssuerDNFromSubject(Subject subject) {
 		String str = null;
-		Set<Subject> subjects = req.getSubjects();
+		Set<Attribute> atts = subject.getAttributes();
 
-		for (Subject subject : subjects) {
-			Set<Attribute> atts = subject.getAttributes();
-
-			for (Attribute att : atts) {
-				if (att.getValues().toString().contains("CN=") || att.getValues().toString().contains("cn=")) {
-					return att.getValues().toString();
-				}
+		for (Attribute att : atts) {
+			if (att.getId().matches(ATTRIBUTE_IDENTIFIER) == true) {
+				str = att.getValues().toString();
+				str = str.replace("[", "");
+				str = str.replace("]", "");
+				return str.trim();
 			}
 		}
 
-		return "failed";
+		return null;
 	}
 
 	/**
@@ -227,15 +233,16 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 * @throws IOException
 	 *             Throws an exception when the file can't be passed.
 	 */
-	private void assuranceFileCheck(String fileName) throws IOException {
-		//String builder, used to build the return string.
+	private List<String> assuranceFileCheck(String fileName) throws IOException {
+		// String builder, used to build the return string.
 		StringBuilder stringBuilder = new StringBuilder();
-		//Open required info file.
+		// Open required info file.
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
 		String line;
 		int firstQuotePos = 0, nextQuotePos = 0;
+		List<String> infoFilesContents = new ArrayList<String>();
 
-		//Loop where the return string is build in.
+		// Loop where the return string is build in.
 		while ((line = br.readLine()) != null) {
 			if (checkStartsWithHashtag(line) == true) {
 				continue;
@@ -262,10 +269,11 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 
 			firstQuotePos = 0;
 			nextQuotePos = 0;
+			infoFilesContents.add(urlDecode(stringBuilder.toString()));
 		}
 
-		infoFilesContents.add(urlDecodeIssuerDNCertificate(stringBuilder.toString()));
 		br.close();
+		return infoFilesContents;
 	}
 
 	/**
