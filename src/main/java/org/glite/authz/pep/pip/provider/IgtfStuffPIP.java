@@ -118,18 +118,17 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 				Attribute policyInformation = new Attribute(POPULATE_REQUEST_ATTRIBUTE_IDENTIFIER);
 				policyInformation.setDataType(Attribute.DT_STRING);
 
-				
 				for (int i = 0; i < infoFilesAll.size(); i++) {
 					file = infoFilesAll.get(i);
 					infoFilesContents = assuranceFileCheck(file);
 
-					for (int j = 0; j < infoFilesContents.size(); j++){
+					for (int j = 0; j < infoFilesContents.size(); j++) {
 						if (infoFilesContents.get(j).contains(CertificateIssuerDN) == true) {
 							policyInformation.getValues().add(file.replace(".info", ""));
 							toApply = true;
 						}
 					}
-					
+
 				}
 				subject.getAttributes().add(policyInformation);
 			}
@@ -139,23 +138,6 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 		}
 
 		return toApply;
-	}
-
-	/**
-	 * URL Encodes the input String.
-	 * 
-	 * @param urlToEncode
-	 *            The String to encode
-	 * @return The encoded string
-	 */
-	private static String urlEncode(String urlToEncode) {
-		StringBuilder strBuilder = new StringBuilder();
-
-		urlToEncode = urlToEncode.replace("#", "%23");
-		urlToEncode = urlToEncode.replace("\"", "%22");
-		urlToEncode = urlToEncode.replace("\\", "%5c");
-
-		return urlToEncode;
 	}
 
 	/**
