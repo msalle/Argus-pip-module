@@ -111,9 +111,13 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 			List<String> infoFilesContents = null;
 			String file = null;
 
+			log.debug("***begin***");
+			log.debug("urlDecode(S%22om%5ce str%33i%23ng): {}", urlDecode("S%22om%5ce str%33i%23ng"));
+			log.debug("***end***");
+			
 			// Start iteration to find correct info files.
 			for (Subject subject : subjects) {
-				CertificateIssuerDN = urlDecode(getIssuerDNFromSubject(subject));
+				CertificateIssuerDN = getIssuerDNFromSubject(subject);
 
 				if (CertificateIssuerDN == null) {
 					log.debug("Certificate issuer with DN " + CertificateIssuerDN + " does not exist.");
@@ -152,20 +156,13 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 * @return The decoded string
 	 */
 	private String urlDecode(String urlToDecode) {
-		int index = urlToDecode.indexOf('%');
-		char[] urlToDecodeArray = urlToDecode.toCharArray();
-		
-//		index = urlToDecode.indexOf('%');
-		
-		for (int i = index; i < urlToDecodeArray.length; i++) {
-			index = urlToDecode.indexOf('%');
-			if (index != -1) {
-				String subSTR = urlToDecode.substring(index + 1, index + 3);
-				urlToDecode = urlToDecode.replace(((String) urlToDecode.substring(index, index + 3)),
-						"" + ((char) Integer.parseInt(subSTR, 16)));
-			}
+		int index;
+
+		while ((index = urlToDecode.indexOf('%')) != -1) {
+			String subSTR = urlToDecode.substring(index + 1, index + 3);
+			urlToDecode = urlToDecode.substring(0, index) + (char) Integer.parseInt(subSTR, 16) + urlToDecode.substring(index+3);
 		}
-		
+
 		return urlToDecode;
 	}
 
