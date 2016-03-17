@@ -29,7 +29,11 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import java.nio.charset.StandardCharsets;
-
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.KeyStoreException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -106,9 +110,14 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 			List<String> infoFilesContents = null;
 			String file = null;
 
+			log.debug("***begin***");
+			log.debug("urlDecode: {}",
+					urlDecode("hwefiuwfuwiefhwieufhiuwehf%23sdgdg%22sdgsgsdg%5cwdbrtthtthrhrth%5Csdf"));
+			log.debug("***END***");
 			// Start iteration to find correct info files.
 			for (Subject subject : subjects) {
 				CertificateIssuerDN = urlDecode(getIssuerDNFromSubject(subject));
+
 				if (CertificateIssuerDN == null) {
 					log.debug("Certificate issuer with DN " + CertificateIssuerDN + " does not exist.");
 					continue;
@@ -147,15 +156,22 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *            The String to decode
 	 * @return The decoded string
 	 */
-	private static String urlDecode(String urlToDecode) {
-		StringBuilder strBuilder = new StringBuilder();
+	private String urlDecode(String urlToDecode) {
+		int index = urlToDecode.indexOf('%');
 
-		urlToDecode = urlToDecode.replace("%23", "#");
-		urlToDecode = urlToDecode.replace("%22", "\"");
-		urlToDecode = urlToDecode.replace("%5c", "\\");
+		index = urlToDecode.indexOf('%');
 
-		// (char)Integer.parseInt(urlToDecode, 16);
+		if (index != -1) {
+			String subSTR = urlToDecode.substring(index + 1, index + 3);
+			urlToDecode = urlToDecode.replace(((String) urlToDecode.substring(index, index + 3)),
+					"" + ((char) Integer.parseInt(subSTR, 16)));
 
+			if (urlToDecode.indexOf('%') != -1) {
+				urlToDecode = urlDecode(urlToDecode);
+			} else {
+				return urlToDecode;
+			}
+		}
 		return urlToDecode;
 	}
 
@@ -163,21 +179,33 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 * Adds all .info files from the grid-security/certifiactes folder
 	 */
 	private List<String> findAllInfoFiles() {
-		File folder = new File(INFO_FILE_LOCATION);
-		File[] listOfFiles = folder.listFiles();
-		String extension = null;
+		// File folder = new File(INFO_FILE_LOCATION);
+		// File[] listOfFiles = folder.listFiles();
+		// String extension = null;
 		List<String> infoFilesAll = new ArrayList<String>();
-		String fileName = null;
-
-		for (File file : listOfFiles) {
-			fileName = file.getName();
-
-			if (file.isFile()) {
-				extension = fileName.substring(fileName.lastIndexOf(".") + 1, fileName.length());
-				if (extension.equals("info")) {
-					infoFilesAll.add(fileName);
+		// String fileName = null;
+		//
+		// for (File file : listOfFiles) {
+		// fileName = file.getName();
+		//
+		// if (file.isFile()) {
+		// extension = fileName.substring(fileName.lastIndexOf(".") + 1,
+		// fileName.length());
+		// if (extension.equals("info")) {
+		// infoFilesAll.add(fileName);
+		// }
+		// }
+		// }
+		// return infoFilesAll;
+		try {
+			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(INFO_FILE_LOCATION), "*.info");
+			for (Path entry : stream) {
+				if (Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) {
+					infoFilesAll.add(entry.getFileName().toString());
 				}
 			}
+		} catch (Exception e) {
+			log.debug(e.getMessage());
 		}
 		return infoFilesAll;
 	}
