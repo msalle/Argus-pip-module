@@ -46,6 +46,7 @@ import java.util.Scanner;
 import java.util.Set;
 
 import javax.naming.InvalidNameException;
+import javax.print.DocFlavor.URL;
 
 import org.glite.authz.common.model.Attribute;
 import org.glite.authz.common.model.Request;
@@ -110,10 +111,6 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 			List<String> infoFilesContents = null;
 			String file = null;
 
-			log.debug("***begin***");
-			log.debug("urlDecode: {}",
-					urlDecode("hwefiuwfuwiefhwieufhiuwehf%23sdgdg%22sdgsgsdg%5cwdbrtthtthrhrth%5Csdf"));
-			log.debug("***END***");
 			// Start iteration to find correct info files.
 			for (Subject subject : subjects) {
 				CertificateIssuerDN = urlDecode(getIssuerDNFromSubject(subject));
@@ -137,11 +134,9 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 							toApply = true;
 						}
 					}
-
 				}
 				subject.getAttributes().add(policyInformation);
 			}
-
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -158,20 +153,19 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 */
 	private String urlDecode(String urlToDecode) {
 		int index = urlToDecode.indexOf('%');
-
-		index = urlToDecode.indexOf('%');
-
-		if (index != -1) {
-			String subSTR = urlToDecode.substring(index + 1, index + 3);
-			urlToDecode = urlToDecode.replace(((String) urlToDecode.substring(index, index + 3)),
-					"" + ((char) Integer.parseInt(subSTR, 16)));
-
-			if (urlToDecode.indexOf('%') != -1) {
-				urlToDecode = urlDecode(urlToDecode);
-			} else {
-				return urlToDecode;
+		char[] urlToDecodeArray = urlToDecode.toCharArray();
+		
+//		index = urlToDecode.indexOf('%');
+		
+		for (int i = index; i < urlToDecodeArray.length; i++) {
+			index = urlToDecode.indexOf('%');
+			if (index != -1) {
+				String subSTR = urlToDecode.substring(index + 1, index + 3);
+				urlToDecode = urlToDecode.replace(((String) urlToDecode.substring(index, index + 3)),
+						"" + ((char) Integer.parseInt(subSTR, 16)));
 			}
 		}
+		
 		return urlToDecode;
 	}
 
@@ -179,24 +173,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 * Adds all .info files from the grid-security/certifiactes folder
 	 */
 	private List<String> findAllInfoFiles() {
-		// File folder = new File(INFO_FILE_LOCATION);
-		// File[] listOfFiles = folder.listFiles();
-		// String extension = null;
 		List<String> infoFilesAll = new ArrayList<String>();
-		// String fileName = null;
-		//
-		// for (File file : listOfFiles) {
-		// fileName = file.getName();
-		//
-		// if (file.isFile()) {
-		// extension = fileName.substring(fileName.lastIndexOf(".") + 1,
-		// fileName.length());
-		// if (extension.equals("info")) {
-		// infoFilesAll.add(fileName);
-		// }
-		// }
-		// }
-		// return infoFilesAll;
 		try {
 			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(INFO_FILE_LOCATION), "*.info");
 			for (Path entry : stream) {
@@ -230,7 +207,6 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 				return str.trim();
 			}
 		}
-
 		return null;
 	}
 
