@@ -67,16 +67,33 @@ import eu.emi.security.authn.x509.proxy.ProxyUtils;
 
 /**
  * @author Rens Visser
+ * @version 1.0
+ * @since 1.0
  * 
- *         The IGTF PIP extracts the issuer DN from the incomming request. IT
- *         then searches all info files to find the required info file(s).
+ *        The IGTF PIP uses a pre-extracted issuer DN from the incoming request.
+ *        The PIP uses the Issuer DN to find info files containing the issuer
+ *        DN. After finding the required *.info files, a XACML request is
+ *        generated and send to the PEPD.
  */
 public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
-	/** Class logger. */
+	/**
+	 * Class logger.
+	 */
 	private final Logger log = LoggerFactory.getLogger(IgtfStuffPIP.class);
 
+	/**
+	 * Default String of the info files location: {@value}
+	 */
 	private final static String INFO_FILE_LOCATION = "/etc/grid-security/certificates/";
+
+	/**
+	 * Default String of issuer DN attribute(s): {@value}
+	 */
 	private final static String ATTRIBUTE_IDENTIFIER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
+
+	/**
+	 * Default String of CA policy names attribute(s): {@value}
+	 */
 	private final static String POPULATE_REQUEST_ATTRIBUTE_IDENTIFIER = "http://authz-interop.org/xacml/subject/ca-policy-names";
 
 	/**
@@ -85,7 +102,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	private static String CertificateIssuerDN;
 
 	/**
-	 * List of .info files to return.
+	 * List of .info files to return to the PEPD.
 	 */
 	private static List<String> infoFilesToReturn = new ArrayList<String>();
 
@@ -104,23 +121,27 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	public boolean populateRequest(Request request) throws PIPProcessingException {
 		boolean toApply = false;
 		try {
-			// Make the request editable and readable in other java code.
+			// Make the request editable and readable in other parts of the java
+			// code.
 			Set<Subject> subjects = request.getSubjects();
-			// find ALL .info files.
+
+			// List of all files in the grid-security directory
 			List<String> infoFilesAll = findAllInfoFiles();
+
+			// List of the contents of a interesting info file
 			List<String> infoFilesContents = null;
 			String file = null;
 
-			log.debug("***begin***");
-			log.debug("urlDecode(S%22om%5ce str%33i%23ng): {}", urlDecode("S%22om%5ce str%33i%23ng"));
-			log.debug("***end***");
-			
 			// Start iteration to find correct info files.
 			for (Subject subject : subjects) {
+				// Gets the Issuer DN from the subject and stores it in the
+				// CerificateIssuerDN variable.
 				CertificateIssuerDN = getIssuerDNFromSubject(subject);
 
+				// Checks if the certificate issuer equals null, if it equals
+				// null, skip the rest of the code and continue with a new loop.
 				if (CertificateIssuerDN == null) {
-					log.debug("Certificate issuer with DN " + CertificateIssuerDN + " does not exist.");
+					log.debug("Certificate issuer does not exist.");
 					continue;
 				}
 
@@ -128,28 +149,35 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 				Attribute policyInformation = new Attribute(POPULATE_REQUEST_ATTRIBUTE_IDENTIFIER);
 				policyInformation.setDataType(Attribute.DT_STRING);
 
+				// Loop over all found info files.
 				for (int i = 0; i < infoFilesAll.size(); i++) {
+					// Use one specific info files
 					file = infoFilesAll.get(i);
+
+					// Get the contents of a infofile in variable called "file".
 					infoFilesContents = assuranceFileCheck(file);
 
 					for (int j = 0; j < infoFilesContents.size(); j++) {
+						// Checks if contents of variable CertificateIssuerDN is
+						// in the infoFileContents.
 						if (infoFilesContents.get(j).contains(CertificateIssuerDN) == true) {
+							// Add to request being send to the PEPD.
 							policyInformation.getValues().add(file.replace(".info", ""));
 							toApply = true;
 						}
 					}
 				}
+				// Actually adding all the information being send to the PEPD.
 				subject.getAttributes().add(policyInformation);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
 		return toApply;
 	}
 
 	/**
-	 * URL decodes the input String.
+	 * Decode the URL in the String urlToDecode.
 	 * 
 	 * @param urlToDecode
 	 *            The String to decode
@@ -158,16 +186,23 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	private String urlDecode(String urlToDecode) {
 		int index;
 
+		//Loop over the urlToDecode string, check if % are present.
 		while ((index = urlToDecode.indexOf('%')) != -1) {
+			//Get the substring containing the encoded character.
 			String subSTR = urlToDecode.substring(index + 1, index + 3);
-			urlToDecode = urlToDecode.substring(0, index) + (char) Integer.parseInt(subSTR, 16) + urlToDecode.substring(index+3);
+			//Concatenate the decoded URL back together.
+			urlToDecode = urlToDecode.substring(0, index) + (char) Integer.parseInt(subSTR, 16)
+					+ urlToDecode.substring(index + 3);
 		}
-
+		//Return entire urlToDecode String.
 		return urlToDecode;
 	}
 
 	/**
-	 * Adds all .info files from the grid-security/certifiactes folder
+	 * Adds all .info files from the grid-security/certificates folder to the variable infoFilesAll. 
+	 * As last the method returns a list containing Strings.
+	 * 
+	 *  @return A list of strings. The strings represent *.info file.
 	 */
 	private List<String> findAllInfoFiles() {
 		List<String> infoFilesAll = new ArrayList<String>();
@@ -185,8 +220,8 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	}
 
 	/**
-	 * Gathers the issuer DN from the incoming request. Return the issuer DN
-	 * when found, if not found the method returns "failed"
+	 * Gathers the issuer DN from subject. Return the issuer DN
+	 * when found, if not found the method returns null.
 	 * 
 	 * @param req
 	 *            The request where the issuer DN is extracted from. from.
@@ -221,8 +256,11 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 		StringBuilder stringBuilder = new StringBuilder();
 		// Open required info file.
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
+		//Variable to store a single of text.
 		String line;
+		//Int variables to store occunrances in a string.
 		int firstQuotePos = 0, nextQuotePos = 0;
+		//Variable contains all content of a *.info file.
 		List<String> infoFilesContents = new ArrayList<String>();
 
 		// Loop where the return string is build in.
@@ -260,12 +298,12 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	}
 
 	/**
-	 * Removes the trailing slash from the input {@link String} and the modified
+	 * Removes the trailing slash from the input {@link String} and returns the modified
 	 * string.
 	 * 
 	 * @param inputString
 	 *            The String where the trailing slash is removed from.
-	 * @return String
+	 * @return The modified String
 	 */
 	private String removeTrailingSlash(String inputString) {
 		StringBuilder toReturn = new StringBuilder(inputString);

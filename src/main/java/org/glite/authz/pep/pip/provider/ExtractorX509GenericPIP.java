@@ -52,10 +52,13 @@ import java.util.List;
 
 /**
  * @author Rens Visser
+ * @version     1.0
+ * @since       1.0
  * 
- *         The X509PIPPolicyOIDExtractor PIP extracts Policy OIDs from incoming
- *         authorization requests. After extracting a XACML request is generated
- *         and send to the PEPD.
+ *         The X509PIPPolicyOIDExtractor PIP extracts Policy OIDs and the issuer
+ *         DN from incoming authorization requests. After extracting the
+ *         required information, a XACML request is generated and send to the
+ *         PEPD.
  */
 public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	/**
@@ -63,7 +66,10 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 */
 	private final Logger log = LoggerFactory.getLogger(ExtractorX509GenericPIP.class);
 
-	/**/
+	/**
+	 * String array of attribute(s) found in the incoming request that are
+	 * accepted: {@value}
+	 */
 	private String[] acceptedAttributes_ = null;
 
 	/**
@@ -77,19 +83,24 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	public final static String ATTRIBUTE_SUBJECT_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
 	/**
-	 * Constructor. if acceptedAttributes is filled, then it makes the local variable available to the whole class.
-	 * If acceptedAttributes is empty, an Exception is thrown and the PIP will not run.
+	 * Constructor method. When acceptedAttributes is filled, then it makes the
+	 * local variable acceptedAttributes_ available to the whole class. If
+	 * acceptedAttributes is empty, an Exception is thrown and the PIP will not
+	 * run.
 	 *
 	 * @param pipid
 	 *            The PIP identifier name
 	 * 
 	 * @param acceptedAttributes
 	 *            String array of accepted attributes.
+	 * 
 	 * @throws Exception
 	 */
 	public ExtractorX509GenericPIP(String pipid, String[] acceptedAttributes) {
 		super(pipid);
 
+		// Check to see if the String array String[] acceptedAttributes is not
+		// empty.
 		if (acceptedAttributes.length == 0) {
 			new Exception("No accepted attributes have been supplied.");
 		}
@@ -99,18 +110,18 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 	/** {@inheritDoc} */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
+		//Declaration of used variables
 		X509Certificate cert = null;
-		// boolean toApplyPIP = true;
 		Set<Subject> subjects = request.getSubjects();
 		Set<Attribute> subjectAttributes = null;
 
-		int debugI = 0;
-
+		//If subjects is empty, the PIP will not run.
 		if (subjects.isEmpty()) {
 			log.debug("Request has no subject!");
 			return false;
 		}
 
+		
 		try {
 
 			for (Subject subject : subjects) {
@@ -133,6 +144,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 					if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID)) {
 						List<String> policyOIDs = getPolicyOIDs(cert);
 
+						//List all found policy IDs
 						for (String str : policyOIDs) {
 							caPolicyOIDsInformation.getValues().add(str);
 						}
@@ -141,6 +153,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 						// Check if its an Issuer DN
 					} else if (acceptedID.equals(ATTRIBUTE_SUBJECT_X509_ISSUER)) {
 						String str = cert.getIssuerX500Principal().getName();
+						//Grab, convert and store the Issuer DN.
 						issuerDNInformation.getValues().add(OpensslNameUtils.convertFromRfc2253(str, false));
 						subjectAttributes.add(issuerDNInformation);
 						// If none of the above, abort!
@@ -148,8 +161,6 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 						throw new Exception("Non-handled attribute specified in ini file: " + acceptedID);
 					}
 				}
-				log.debug("DebugI value: {}", debugI);
-				debugI++;
 			}
 		} catch (Exception e) {
 			log.debug(e.getMessage());
@@ -166,10 +177,11 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @param cert
 	 *            The x509Certificate where the Policy OID(s) are extracted
 	 *            from.
-	 * @return a List<String> instance. The list is filled with Policy OIDs strings.
+	 * @return a List<String> instance. The list is filled with Policy OIDs
+	 *         strings.
 	 * @throws IOException
 	 */
-	@SuppressWarnings("resource") // Added to restrict umeaningful errors
+	@SuppressWarnings("resource") // Added to supres errors that are not useful
 	private List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
 		List<String> oidList = new LazyList<String>();
 		StringBuilder debugSTR = new StringBuilder();
@@ -203,7 +215,8 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 	/**
 	 * Creates a X509Certificate chain from a Attribute indicated by element
-	 * from a Set of Attributes. Does this by finding the Attribute corresponding to the element.
+	 * from a Set of Attributes. Does this by finding the Attribute
+	 * corresponding to the element.
 	 *
 	 * @param attributes
 	 *            A {@link Set} filled with {@link Attribute}

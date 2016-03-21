@@ -35,10 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.bouncycastle.x509.X509Attribute;
 import eu.emi.security.authn.x509.proxy.OidAndValue;
-/**
- * Created by rens on 9-2-16.
- */
-@SuppressWarnings("unused")
+
 public class IgtfStuffPIPIniConfigurationParser implements IniSectionConfigurationParser<PolicyInformationPoint>{
 
     /** Class logger. */
