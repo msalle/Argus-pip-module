@@ -30,7 +30,7 @@ import org.glite.authz.common.config.ConfigurationException;
 import org.glite.authz.common.config.IniConfigUtil;
 import org.glite.authz.common.config.IniSectionConfigurationParser;
 import org.glite.authz.common.util.Strings;
-
+import org.glite.authz.pep.pip.PIPProcessingException;
 import org.glite.authz.pep.pip.PolicyInformationPoint;
 
 import org.ini4j.Ini;
@@ -39,23 +39,48 @@ import org.slf4j.LoggerFactory;
 import org.bouncycastle.x509.X509Attribute;
 import eu.emi.security.authn.x509.proxy.OidAndValue;
 
+/**
+ * @author Rens Visser
+ * @version 1.0
+ * @since 1.0
+ * 
+ *        The ExtractorX509GenericPIPIniConfigurationParser class, is the
+ *        Configuration parser for the ExtractorX509GenericPIP PIP.
+ */
 public class ExtractorX509GenericPIPIniConfigurationParser
 		implements IniSectionConfigurationParser<PolicyInformationPoint> {
 
 	/** Class logger. */
 	private Logger log = LoggerFactory.getLogger(ExtractorX509GenericPIPIniConfigurationParser.class);
 
+	/**
+	 * String of text used in the configuration of the PIP: {@value}
+	 */
 	protected static String ACCEPTED_PROFILE_IDS_PROP = "acceptedProfileIDs";
 
-	/** {@inheritDoc} */
+	/**
+	 * The Argus framework makes sure that when a PIP is created, the method
+	 * parse() is called. This method is always run.
+	 * 
+	 * When the PIP is not configured correctly a ConfigurationException is
+	 * thrown.
+	 * 
+	 * @param iniConfig
+	 *            Configuration options, pulled from the ini file.
+	 * 
+	 * @param configBuilder
+	 *            An configuration builder.
+	 * 
+	 * @throws ConfigurationException
+	 * 
+	 * @return boolean
+	 */
 	public PolicyInformationPoint parse(Ini.Section iniConfig, AbstractConfigurationBuilder<?> configBuilder)
 			throws ConfigurationException {
 
 		String pipid = iniConfig.getName();
-
-		// read accepted profile IDs from config
+		// read accepted profile IDs from configuration.
 		String[] acceptedProfileIds = parseValuesList(iniConfig.get(ACCEPTED_PROFILE_IDS_PROP));
-
 		ExtractorX509GenericPIP pip = new ExtractorX509GenericPIP(pipid, acceptedProfileIds);
 
 		return pip;

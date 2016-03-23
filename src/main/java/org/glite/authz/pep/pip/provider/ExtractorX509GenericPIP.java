@@ -52,13 +52,15 @@ import java.util.List;
 
 /**
  * @author Rens Visser
- * @version     1.0
- * @since       1.0
+ * @version 1.0
+ * @since 1.0
  * 
- *         The X509PIPPolicyOIDExtractor PIP extracts Policy OIDs and the issuer
- *         DN from incoming authorization requests. After extracting the
- *         required information, a XACML request is generated and send to the
- *         PEPD.
+ *        The X509PIPPolicyOIDExtractor PIP extracts Policy OIDs and the issuer
+ *        DN from incoming authorization requests. After extracting the required
+ *        information, a existing XACML request is populated with the extracted
+ *        information.
+ * 
+ *        PIP fails running when subjectid is used instead of Keyinfo.
  */
 public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	/**
@@ -83,10 +85,14 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	public final static String ATTRIBUTE_SUBJECT_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
 	/**
-	 * Constructor method. When acceptedAttributes is filled, then it makes the
-	 * local variable acceptedAttributes_ available to the whole class. If
-	 * acceptedAttributes is empty, an Exception is thrown and the PIP will not
-	 * run.
+	 * Default String of key-info attribute(s): {@value}
+	 */
+	private final static String ATTRIBUTE_KEY_INFO = "urn:oasis:names:tc:xacml:1.0:subject:key-info";
+
+	/**
+	 * When acceptedAttributes is filled, then it makes the local variable
+	 * acceptedAttributes_ available to the whole class. If acceptedAttributes
+	 * is empty, an Exception is thrown and the PIP will not run.
 	 *
 	 * @param pipid
 	 *            The PIP identifier name
@@ -108,20 +114,37 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 		acceptedAttributes_ = acceptedAttributes;
 	}
 
-	/** {@inheritDoc} */
+	/**
+	 * The method that does all the work. The Argus framework makes sure that
+	 * when a PIP does apply to a request, the populateRequest(Request request)
+	 * method is always run.
+	 * 
+	 * When the incoming request has no subjects then this PIP will NOT run.
+	 * This PIP will throw an Exception when an attribute is not configured in
+	 * the pepd.ini configuration file. This PIP takes an incoming request, it
+	 * extracts the Issuer DN and the CA policy OIDs from the incoming request.
+	 *
+	 * 
+	 * @param request
+	 *            Request object containing all information of the incoming
+	 *            request.
+	 * 
+	 * @throws PIPProcessingException
+	 * 
+	 * @return boolean
+	 */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
-		//Declaration of used variables
+		// Declaration of used variables
 		X509Certificate cert = null;
 		Set<Subject> subjects = request.getSubjects();
 		Set<Attribute> subjectAttributes = null;
 
-		//If subjects is empty, the PIP will not run.
+		// If subjects is empty, the PIP will not run.
 		if (subjects.isEmpty()) {
 			log.debug("Request has no subject!");
 			return false;
 		}
 
-		
 		try {
 
 			for (Subject subject : subjects) {
@@ -134,7 +157,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 				issuerDNInformation.setDataType(Attribute.DT_STRING);
 
 				// Get the end-entity X509 certificate.
-				cert = ProxyUtils.getEndUserCertificate(findPEMAttributeForConverson(subjectAttributes, "Subject"));
+				cert = ProxyUtils.getEndUserCertificate(findPEMAttributeForConverson(subjectAttributes));
 
 				// Loop over each accepted attribute .
 				for (int i = 0; i < acceptedAttributes_.length; i++) {
@@ -144,7 +167,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 					if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID)) {
 						List<String> policyOIDs = getPolicyOIDs(cert);
 
-						//List all found policy IDs
+						// List all found policy IDs
 						for (String str : policyOIDs) {
 							caPolicyOIDsInformation.getValues().add(str);
 						}
@@ -153,7 +176,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 						// Check if its an Issuer DN
 					} else if (acceptedID.equals(ATTRIBUTE_SUBJECT_X509_ISSUER)) {
 						String str = cert.getIssuerX500Principal().getName();
-						//Grab, convert and store the Issuer DN.
+						// Grab, convert and store the Issuer DN.
 						issuerDNInformation.getValues().add(OpensslNameUtils.convertFromRfc2253(str, false));
 						subjectAttributes.add(issuerDNInformation);
 						// If none of the above, abort!
@@ -172,19 +195,19 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 	/**
 	 * Gets the policy OIDs from a {@link X509Certificate} and returns a list of
-	 * string instances.
+	 * policy OIds in String object format.
 	 * 
 	 * @param cert
 	 *            The x509Certificate where the Policy OID(s) are extracted
 	 *            from.
 	 * @return a List<String> instance. The list is filled with Policy OIDs
 	 *         strings.
+	 * 
 	 * @throws IOException
 	 */
 	@SuppressWarnings("resource") // Added to supres errors that are not useful
 	private List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
 		List<String> oidList = new LazyList<String>();
-		StringBuilder debugSTR = new StringBuilder();
 
 		byte[] extvalue = cert.getExtensionValue(Extension.certificatePolicies.toString());
 
@@ -202,59 +225,80 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 		for (int pos = 0; pos < seq.size(); pos++) {
 			if (PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId() != null) {
 				oidList.add(PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId());
-				debugSTR.append(
-						PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId() + "/r");
 			} else {
 				throw new IOException("Policy does not exist!");
 			}
 		}
 
-		log.debug("Found policies: {}", debugSTR.toString());
 		return oidList;
 	}
 
 	/**
 	 * Creates a X509Certificate chain from a Attribute indicated by element
-	 * from a Set of Attributes. Does this by finding the Attribute
-	 * corresponding to the element.
+	 * from a Set of Attributes. Does this by finding the Attribute ID
+	 * corresponding to the required attribute. Quits PIP when no PEM string is
+	 * found in the content. The incoming request must have a
+	 * {@value ATTRIBUTE_KEY_INFO} attribute, if not quits the PIP.
 	 *
 	 * @param attributes
 	 *            A {@link Set} filled with {@link Attribute}
 	 * 
-	 * @param element
-	 *            What element to get
 	 * @return a X509Certificate[] objects instance
 	 * @throws IOException
 	 * @throws KeyStoreException
 	 * @throws CertificateException
 	 * @throws PIPProcessingException
 	 */
-	private static X509Certificate[] findPEMAttributeForConverson(Set<Attribute> attributes, String element)
+	private X509Certificate[] findPEMAttributeForConverson(Set<Attribute> attributes)
 			throws CertificateException, KeyStoreException, IOException, PIPProcessingException {
-		X509Certificate[] pemChain = null;
+		X509Certificate[] certificateChain = null;
+		boolean hasExecuted = false;
+
 		if (attributes.size() < 1) {
-			throw new PIPProcessingException("Decision request " + element + " without any chain!");
+			throw new PIPProcessingException("Request without subject element!");
 		}
+
 		// Contains all certificates as a string
 		for (Attribute attribute : attributes) {
-			Set<Object> attributeValues = attribute.getValues();
-			// Used for other values
-			for (Object attributeValue : attributeValues) {
-				pemChain = pemConvertToX509CertificateChain(attributeValue.toString());
+			// Check whether the attribute ID is
+			// "urn:oasis:names:tc:xacml:1.0:subject:key-info". When true
+			// execute, else continue to next element.
+			if (attribute.getId().equals(ATTRIBUTE_KEY_INFO)) {
+				Set<Object> attributeValues = attribute.getValues();
+				// Used for other values
+				for (Object attributeValue : attributeValues) {
+					// Checks if string contains pem formatted content
+					try {
+						certificateChain = pemConvertToX509CertificateChain((String) attributeValue);
+						hasExecuted = true;
+					} catch (Exception e) {
+						throw new PIPProcessingException("The PEM string is not correct!");
+					}	
+					;
+				}
 			}
 		}
-		return pemChain;
+
+		if (hasExecuted == false) {
+			throw new PIPProcessingException(
+					"No pem String content in request! PIP ExtractorX509GenericPIP quited running...");
+		}
+		return certificateChain;
 	}
 
 	/**
-	 * Converts a PEM formatted String to a {@link X509Certificate} instances
-	 * array.
+	 * Converts a PEM String to a X509Certificate object array. Utterly fails
+	 * and throws an exception when NO PEM String is provided.
 	 *
 	 * @param pem
 	 *            A PEM formatted String
 	 * @return a X509Certificate[] chain
+	 * 
+	 * @throws IOException
+	 * @throws KeyStoreException
+	 * @throws CertificateException
 	 */
-	public static X509Certificate[] pemConvertToX509CertificateChain(String pem)
+	public X509Certificate[] pemConvertToX509CertificateChain(String pem)
 			throws CertificateException, IOException, KeyStoreException {
 		// Convert string to a UTF-8 encoded InputStream PEM object.
 		InputStream pemReader = new ByteArrayInputStream(pem.getBytes(StandardCharsets.UTF_8));

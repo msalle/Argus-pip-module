@@ -36,20 +36,41 @@ import org.slf4j.LoggerFactory;
 import org.bouncycastle.x509.X509Attribute;
 import eu.emi.security.authn.x509.proxy.OidAndValue;
 
-public class IgtfStuffPIPIniConfigurationParser implements IniSectionConfigurationParser<PolicyInformationPoint>{
+/**
+ * @author Rens Visser
+ * @version 1.0
+ * @since 1.0
+ * 
+ *        The ExtractorX509GenericPIPIniConfigurationParser class, is the
+ *        Configuration parser for the ExtractorX509GenericPIP PIP.
+ */
+public class IgtfStuffPIPIniConfigurationParser implements IniSectionConfigurationParser<PolicyInformationPoint> {
 
-    /** Class logger. */
-    private Logger log= LoggerFactory.getLogger(IgtfStuffPIPIniConfigurationParser.class);
-    
-    
-   
-    /** {@inheritDoc} */
-    public PolicyInformationPoint parse(Ini.Section iniConfig, AbstractConfigurationBuilder<?> configBuilder) throws ConfigurationException {
-   	 
-    	String pipid= iniConfig.getName();
+	/** Class logger. */
+	private Logger log = LoggerFactory.getLogger(IgtfStuffPIPIniConfigurationParser.class);
 
-    	IgtfStuffPIP pip= new IgtfStuffPIP(pipid);
-     
-        return pip;
-    }
+	/**
+	 * The Argus framework makes sure that when a PIP is created, the method
+	 * parse() is called. This method is always run.
+	 * 
+	 * When the PIP is not configured correctly a ConfigurationException is
+	 * thrown.
+	 * 
+	 * @param iniConfig
+	 *            Configuration options, pulled from the ini file.
+	 * 
+	 * @param configBuilder
+	 *            An configuration builder.
+	 * 
+	 * @throws ConfigurationException
+	 * 
+	 * @return boolean
+	 */
+	public PolicyInformationPoint parse(Ini.Section iniConfig, AbstractConfigurationBuilder<?> configBuilder)
+			throws ConfigurationException {
+		String pipid = iniConfig.getName();
+		IgtfStuffPIP pip = new IgtfStuffPIP(pipid);
+
+		return pip;
+	}
 }

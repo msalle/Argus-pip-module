@@ -44,6 +44,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.naming.InvalidNameException;
 import javax.print.DocFlavor.URL;
@@ -136,7 +138,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 			for (Subject subject : subjects) {
 				// Gets the Issuer DN from the subject and stores it in the
 				// CerificateIssuerDN variable.
-				CertificateIssuerDN = getIssuerDNFromSubject(subject);
+				CertificateIssuerDN = getIssuerDNFromSubject(subject.getAttributes());
 
 				// Checks if the certificate issuer equals null, if it equals
 				// null, skip the rest of the code and continue with a new loop.
@@ -177,7 +179,7 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	}
 
 	/**
-	 * Decode the URL in the String urlToDecode.
+	 * Decodes the URL in the String urlToDecode.
 	 * 
 	 * @param urlToDecode
 	 *            The String to decode
@@ -186,23 +188,24 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	private String urlDecode(String urlToDecode) {
 		int index;
 
-		//Loop over the urlToDecode string, check if % are present.
+		// Loop over the urlToDecode string, check if % are present.
 		while ((index = urlToDecode.indexOf('%')) != -1) {
-			//Get the substring containing the encoded character.
+			// Get the substring containing the encoded character.
 			String subSTR = urlToDecode.substring(index + 1, index + 3);
-			//Concatenate the decoded URL back together.
+			// Concatenate the decoded URL back together.
 			urlToDecode = urlToDecode.substring(0, index) + (char) Integer.parseInt(subSTR, 16)
 					+ urlToDecode.substring(index + 3);
 		}
-		//Return entire urlToDecode String.
+		// Return entire urlToDecode String.
 		return urlToDecode;
 	}
 
 	/**
-	 * Adds all .info files from the grid-security/certificates folder to the variable infoFilesAll. 
-	 * As last the method returns a list containing Strings.
+	 * Adds all .info files from the grid-security/certificates folder to the
+	 * variable infoFilesAll. As last the method returns a list containing
+	 * Strings. The Strings contain all *.info files.
 	 * 
-	 *  @return A list of strings. The strings represent *.info file.
+	 * @return A list of strings. The strings represent *.info file.
 	 */
 	private List<String> findAllInfoFiles() {
 		List<String> infoFilesAll = new ArrayList<String>();
@@ -220,18 +223,17 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	}
 
 	/**
-	 * Gathers the issuer DN from subject. Return the issuer DN
-	 * when found, if not found the method returns null.
+	 * Gathers the issuer DN from Attributes. Return the issuer DN when found,
+	 * if not found the method returns null.
 	 * 
 	 * @param req
 	 *            The request where the issuer DN is extracted from. from.
 	 * @return A string with "failed" or the issuer DN.
 	 */
-	private String getIssuerDNFromSubject(Subject subject) {
+	private String getIssuerDNFromSubject(Set<Attribute> attributes) {
 		String str = null;
-		Set<Attribute> atts = subject.getAttributes();
 
-		for (Attribute att : atts) {
+		for (Attribute att : attributes) {
 			if (att.getId().matches(ATTRIBUTE_IDENTIFIER) == true) {
 				str = att.getValues().toString();
 				str = str.replace("[", "");
@@ -244,7 +246,9 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 
 	/**
 	 * Parses the file from the input String. Method searches for a line with
-	 * "SubjectDN" and parses it.
+	 * "subjectdn" and parses it. After finding "subjectdn" and having it parsed, the code will parse for follow up lines. 
+	 * In all cases when there is a trailing slash, the slash will be removed. 
+	 * This method also uses the urlDecode method to decode the strings. 
 	 * 
 	 * @param fileName
 	 *            The {@link String} of the file to parse.
@@ -252,54 +256,35 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 *             Throws an exception when the file can't be passed.
 	 */
 	private List<String> assuranceFileCheck(String fileName) throws IOException {
-		// String builder, used to build the return string.
 		StringBuilder stringBuilder = new StringBuilder();
-		// Open required info file.
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
-		//Variable to store a single of text.
-		String line;
-		//Int variables to store occunrances in a string.
-		int firstQuotePos = 0, nextQuotePos = 0;
-		//Variable contains all content of a *.info file.
+		String contentLine;
 		List<String> infoFilesContents = new ArrayList<String>();
-
-		// Loop where the return string is build in.
-		while ((line = br.readLine()) != null) {
-			if (checkStartsWithHashtag(line) == true) {
-				continue;
+		Pattern p = Pattern
+				.compile("((?<!#)(subjectdn\\s=\\s){1}(\\s*\\\"){1}(" + CertificateIssuerDN + ")*\\\"(,?\\s*\\\\?)?)?");
+		while ((contentLine = br.readLine()) != null) {	
+			Matcher m = p.matcher(contentLine);
+			m.find();
+			contentLine = m.group();
+			if (contentLine.length() != 0) {
+				stringBuilder.append(removeTrailingSlash(m.group()));
+				p = Pattern.compile("((?<!#)(\\s*\\\"){1}([0-9a-zA-Z/=\\s-.:])*\\\"(,?\\s*\\\\?)?)*");
 			}
-
-			if (line.contains("subjectdn") == true) {
-				line = removeTrailingSlash(line);
-				stringBuilder.append(line);
-				continue;
-			}
-
-			line = removeTrailingSlash(line);
-			char[] cararray = line.toCharArray();
-
-			for (int i = 0; i < cararray.length; i++) {
-				if (cararray[i] == '"' && firstQuotePos == nextQuotePos) {
-					firstQuotePos = i;
-				} else if (cararray[i] == '"' && firstQuotePos > nextQuotePos) {
-					nextQuotePos = i;
-					stringBuilder.append(line);
-					firstQuotePos = nextQuotePos;
-				}
-			}
-
-			firstQuotePos = 0;
-			nextQuotePos = 0;
-			infoFilesContents.add(urlDecode(stringBuilder.toString()));
 		}
 
 		br.close();
-		return infoFilesContents;
+		
+		if(stringBuilder.length() != 0){
+			infoFilesContents.add(urlDecode(stringBuilder.toString()));
+			return infoFilesContents;
+		}
+		
+		return null;
 	}
 
 	/**
-	 * Removes the trailing slash from the input {@link String} and returns the modified
-	 * string.
+	 * Removes the trailing slash from the input {@link String} and returns the
+	 * modified string.
 	 * 
 	 * @param inputString
 	 *            The String where the trailing slash is removed from.
@@ -314,30 +299,5 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 		}
 
 		return toReturn.toString();
-	}
-
-	/**
-	 * Checks if input string starts with a #, if yes return true else return
-	 * false.
-	 * 
-	 * @param toSearchline
-	 *            The {@link String} With a issuer DN is parsed for a #
-	 * @return {@link Boolean}
-	 */
-	private boolean checkStartsWithHashtag(String toSearchline) {
-		boolean toReturn = false;
-
-		toSearchline = toSearchline.trim();
-
-		for (int i = 0; i < toSearchline.length(); i++) {
-			if (toSearchline.charAt(i) == '"') {
-				toReturn = false;
-				break;
-			} else if (toSearchline.charAt(i) == '#') {
-				toReturn = true;
-				break;
-			}
-		}
-		return toReturn;
 	}
 }
