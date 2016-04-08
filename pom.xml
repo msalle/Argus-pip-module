@@ -5,7 +5,7 @@
     <!--parent>
         <groupId>org.glite.authz</groupId>
         <artifactId>argus-parent</artifactId>
-        <version>1.6</version>
+        <version>1.7-SNAPSHOT</version>
     </parent -->
     
     <name>Argus PEP Server Plugin as PIP</name>
@@ -18,7 +18,32 @@
         <dependency>
             <groupId>org.glite.authz</groupId>
             <artifactId>argus-pepd</artifactId>
-            <version>1.6.2</version>
+            <version>1.7.1</version>
         </dependency>
-    </dependencies>
+<dependency>
+  <groupId>junit</groupId>     <!-- NOT org.junit here -->
+  <artifactId>junit</artifactId>
+  <version>4.11</version>
+  <scope>test</scope>
+</dependency>
+</dependencies>
+<build>
+<plugins>
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-javadoc-plugin</artifactId>
+  <version>2.7</version>
+  <configuration>
+  </configuration>
+  <executions>
+    <execution>
+      <goals>
+        <goal>javadoc</goal>
+      </goals>
+      <phase>compile</phase>
+    </execution>
+  </executions>
+</plugin>
+</plugins>
+</build>
 </project>
