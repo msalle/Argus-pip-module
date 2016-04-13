@@ -29,12 +29,15 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import java.nio.charset.StandardCharsets;
+
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
 import java.security.KeyStoreException;
+
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
@@ -44,6 +47,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -54,6 +58,7 @@ import org.glite.authz.common.model.Attribute;
 import org.glite.authz.common.model.Request;
 import org.glite.authz.common.model.Resource;
 import org.glite.authz.common.model.Subject;
+
 import org.glite.authz.pep.pip.PIPProcessingException;
 
 import org.slf4j.Logger;
@@ -72,16 +77,16 @@ import eu.emi.security.authn.x509.proxy.ProxyUtils;
  * @version 1.0
  * @since 1.0
  * 
- *        The IGTF PIP uses a pre-extracted issuer DN from the incoming request.
- *        The PIP uses the Issuer DN to find info files containing the issuer
- *        DN. After finding the required *.info files, a XACML request is
- *        generated and send to the PEPD.
+ *        The InInfoFileIssuerDNMatcher PIP uses a pre-extracted issuer DN from
+ *        the incoming request. The PIP uses the Issuer DN to find info files
+ *        containing the issuer DN. After finding the required *.info files, the
+ *        XACML request is populated and can be used by the PEPD.
  */
-public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
+public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	/**
 	 * Class logger.
 	 */
-	private final Logger log = LoggerFactory.getLogger(IgtfStuffPIP.class);
+	private final Logger log = LoggerFactory.getLogger(InInfoFileIssuerDNMatcher.class);
 
 	/**
 	 * Default String of the info files location: {@value}
@@ -91,12 +96,12 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	/**
 	 * Default String of issuer DN attribute(s): {@value}
 	 */
-	private final static String ATTRIBUTE_IDENTIFIER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
+	private final static String ATTRIBUTE_IDENTIFIER_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
 	/**
 	 * Default String of CA policy names attribute(s): {@value}
 	 */
-	private final static String POPULATE_REQUEST_ATTRIBUTE_IDENTIFIER = "http://authz-interop.org/xacml/subject/ca-policy-names";
+	private final static String ATTRIBUTE_IDENTIFIER_CA_POLICY_NAMES = "http://authz-interop.org/xacml/subject/ca-policy-names";
 
 	/**
 	 * Contains a string of the certificate issuer DN.
@@ -104,35 +109,53 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	private static String CertificateIssuerDN;
 
 	/**
-	 * List of .info files to return to the PEPD.
-	 */
-	private static List<String> infoFilesToReturn = new ArrayList<String>();
-
-	/**
 	 * The constructor
 	 * 
 	 * @param pipid
 	 *            String consisting of the identifier of the pip.
 	 */
-	public IgtfStuffPIP(String pipid) {
+	public InInfoFileIssuerDNMatcher(String pipid) {
 		super(pipid);
-
 	}
 
+	/** 
+	 * When the incoming request has no subjects then this PIP will NOT run.
+	 * This PIP will throw an Exception when CertificateIssuerDN is empty. This PIP takes an incoming request, it
+	 * extracts the Issuer DN incoming request. 
+	 * The extracted issuer DN is then compared to certificate issuer in all *.info files on the server.
+	 * This PIP fails when, there are no info files. 
+	 *
+	 * The method that does all the work. The Argus framework makes sure that
+	 * when a PIP does apply to a request, the populateRequest(Request request)
+	 * method is always run.
+	 * 
+	 * @param request
+	 *            Request object containing all information of the incoming
+	 *            request.
+	 * 
+	 * @throws PIPProcessingException
+	 * 
+	 * @return boolean
+	 */
 	/** {@inheritDoc} */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
-		boolean toApply = false;
+		boolean PIP_applied = false;
+		
+		
 		try {
 			// Make the request editable and readable in other parts of the java
 			// code.
 			Set<Subject> subjects = request.getSubjects();
 
 			// List of all files in the grid-security directory
-			List<String> infoFilesAll = findAllInfoFiles();
+			List<String> allInfoFiles = findAllInfoFiles();
 
-			// List of the contents of a interesting info file
-			List<String> infoFilesContents = null;
 			String file = null;
+			
+			if (subjects.isEmpty()) {
+				log.debug("Request has no subject!");
+				return false;
+			}
 
 			// Start iteration to find correct info files.
 			for (Subject subject : subjects) {
@@ -143,30 +166,27 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 				// Checks if the certificate issuer equals null, if it equals
 				// null, skip the rest of the code and continue with a new loop.
 				if (CertificateIssuerDN == null) {
-					log.debug("Certificate issuer does not exist.");
-					continue;
+					throw new Exception("Certificate issuer attribute is not set");
 				}
 
 				// Create the attributes to be send to PEPD.
-				Attribute policyInformation = new Attribute(POPULATE_REQUEST_ATTRIBUTE_IDENTIFIER);
+				Attribute policyInformation = new Attribute(ATTRIBUTE_IDENTIFIER_CA_POLICY_NAMES);
 				policyInformation.setDataType(Attribute.DT_STRING);
 
 				// Loop over all found info files.
-				for (int i = 0; i < infoFilesAll.size(); i++) {
+				for (int i = 0; i < allInfoFiles.size(); i++) {
 					// Use one specific info files
-					file = infoFilesAll.get(i);
+					file = allInfoFiles.get(i);
 
-					// Get the contents of a infofile in variable called "file".
-					infoFilesContents = assuranceFileCheck(file);
+					// Matches CertificateIssuerDN to contents if info file
+					// specified in "file".
+					if (issuerDNParser(file)) {
+						PIP_applied = true;
+						policyInformation.getValues().add(file.replace(".info", ""));
+					}
 
-					for (int j = 0; j < infoFilesContents.size(); j++) {
-						// Checks if contents of variable CertificateIssuerDN is
-						// in the infoFileContents.
-						if (infoFilesContents.get(j).contains(CertificateIssuerDN) == true) {
-							// Add to request being send to the PEPD.
-							policyInformation.getValues().add(file.replace(".info", ""));
-							toApply = true;
-						}
+					if (allInfoFiles == null) {
+						throw new PIPProcessingException("No info files match issuer dn!");
 					}
 				}
 				// Actually adding all the information being send to the PEPD.
@@ -175,7 +195,8 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		return toApply;
+		return PIP_applied;
+		// return true;
 	}
 
 	/**
@@ -231,55 +252,149 @@ public class IgtfStuffPIP extends AbstractPolicyInformationPoint {
 	 * @return A string with "failed" or the issuer DN.
 	 */
 	private String getIssuerDNFromSubject(Set<Attribute> attributes) {
-		String str = null;
+		StringBuilder strBuilder = new StringBuilder();
 
 		for (Attribute att : attributes) {
-			if (att.getId().matches(ATTRIBUTE_IDENTIFIER) == true) {
-				str = att.getValues().toString();
-				str = str.replace("[", "");
-				str = str.replace("]", "");
-				return str.trim();
+			if (att.getId().matches(ATTRIBUTE_IDENTIFIER_X509_ISSUER) == true) {
+				strBuilder.append(att.getValues().iterator().next());
+				return strBuilder.toString().trim();
 			}
 		}
 		return null;
 	}
 
 	/**
-	 * Parses the file from the input String. Method searches for a line with
-	 * "subjectdn" and parses it. After finding "subjectdn" and having it parsed, the code will parse for follow up lines. 
-	 * In all cases when there is a trailing slash, the slash will be removed. 
-	 * This method also uses the urlDecode method to decode the strings. 
+	 * Parses the file from the input String. Method parses all lines in the
+	 * .info file. All lines are parsed one by one. Checks if line ends with a
+	 * "\" if yes, remove the slash. Checks if line contains hask. If yes,
+	 * removes the # and all text behind it. Returns true if info file is found,
+	 * false otherwise.
 	 * 
 	 * @param fileName
 	 *            The {@link String} of the file to parse.
 	 * @throws IOException
 	 *             Throws an exception when the file can't be passed.
 	 */
-	private List<String> assuranceFileCheck(String fileName) throws IOException {
+	private Boolean issuerDNParser(String fileName) throws IOException, Exception {
 		StringBuilder stringBuilder = new StringBuilder();
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
-		String contentLine;
+		String contentLine = null;
 		List<String> infoFilesContents = new ArrayList<String>();
-		Pattern p = Pattern
-				.compile("((?<!#)(subjectdn\\s=\\s){1}(\\s*\\\"){1}(" + CertificateIssuerDN + ")*\\\"(,?\\s*\\\\?)?)?");
-		while ((contentLine = br.readLine()) != null) {	
-			Matcher m = p.matcher(contentLine);
-			m.find();
-			contentLine = m.group();
-			if (contentLine.length() != 0) {
-				stringBuilder.append(removeTrailingSlash(m.group()));
-				p = Pattern.compile("((?<!#)(\\s*\\\"){1}([0-9a-zA-Z/=\\s-.:])*\\\"(,?\\s*\\\\?)?)*");
+
+		while ((contentLine = br.readLine()) != null) {
+
+			if (lineEndsWithBackSlash(contentLine)) {
+				contentLine = removeTrailingSlash(contentLine);
+				stringBuilder.append(contentLine);
+				continue;
+
+			} else {
+				stringBuilder.append(contentLine);
+				contentLine = stringBuilder.toString();
+				stringBuilder = new StringBuilder();
+			}
+
+			if (lineContainsHash(contentLine)) {
+				contentLine = removeHashAndRestOfline(contentLine);
+			}
+
+			contentLine = contentLine.trim();
+		}
+		br.close();
+
+		contentLine = iterateContentRemovesSubjectDN(infoFilesContents);
+
+		if (issuerDNMatcher(contentLine)) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Matches all lines till known issuerDN and the searched issuerDN are
+	 * matched. After the match either a true on success, or false on failure is
+	 * returned. Splits the string into an array, the array is then searched.
+	 * 
+	 * @param input
+	 *            String to be checked.
+	 * @return Boolean true on success, false on failure.
+	 */
+	private Boolean issuerDNMatcher(String input) {
+		String[] issuerDNInfoFileArray = input.split("(?<=\\\"),");
+		String decodedCertificateIssuerDN;
+
+		for (int b = 0; b < issuerDNInfoFileArray.length; b++) {
+			decodedCertificateIssuerDN = urlDecode(issuerDNInfoFileArray[b].trim());
+			if (decodedCertificateIssuerDN.matches("\"" + CertificateIssuerDN + "\"")) {
+				return true;
 			}
 		}
+		return false;
+	}
 
-		br.close();
-		
-		if(stringBuilder.length() != 0){
-			infoFilesContents.add(urlDecode(stringBuilder.toString()));
-			return infoFilesContents;
+	/**
+	 * Removes "subjectdn = " from the input strings.
+	 * 
+	 * @param infoFilesContentsToReturn
+	 *            list of strings to be checked.
+	 * @return String The modified string or "" if none "subjectdn = " is found.
+	 */
+	private String iterateContentRemovesSubjectDN(List<String> infoFilesContentsToReturn) {
+		String string;
+		for (int i = 0; i < infoFilesContentsToReturn.size(); i++) {
+			string = infoFilesContentsToReturn.get(i);
+			if (string.contains("subjectdn")) {
+				return string.replaceFirst("(\\s*subjectdn(\\s)*=(\\s)*)", "");
+			}
 		}
-		
-		return null;
+		return "";
+	}
+
+	/**
+	 * Removes the "#" and everything behind the "#" from the input string.
+	 * 
+	 * @param input
+	 *            The String to be modified.
+	 * @return String The modified string.
+	 */
+	private String removeHashAndRestOfline(String input) {
+		int i = input.indexOf("#");
+
+		if (i == 0) {
+			return " ";
+		} else {
+			return input.substring(0, i - 1);
+		}
+		// return "";
+	}
+
+	/**
+	 * Checks if the input has a "#".
+	 * 
+	 * @param input
+	 *            The String to be checked.
+	 * @return String true if string contains "#", false otherwise
+	 */
+	private Boolean lineContainsHash(String input) {
+		if (input.contains("#")) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Checks if the input end with a "\\".
+	 * 
+	 * @param input
+	 *            The String to be tested.
+	 * @return Boolean true if ends with "\\", false otherwise
+	 */
+	private Boolean lineEndsWithBackSlash(String input) {
+		if (input.endsWith("\\")) {
+			return true;
+		}
+
+		return false;
 	}
 
 	/**

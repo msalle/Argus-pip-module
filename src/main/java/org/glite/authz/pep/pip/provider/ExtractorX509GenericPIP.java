@@ -82,12 +82,12 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	/**
 	 * Default String of Issuer DN attribute(s): {@value}
 	 */
-	public final static String ATTRIBUTE_SUBJECT_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
+	public final static String ATTRIBUTE_IDENTIFIER_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
 	/**
 	 * Default String of key-info attribute(s): {@value}
 	 */
-	private final static String ATTRIBUTE_KEY_INFO = "urn:oasis:names:tc:xacml:1.0:subject:key-info";
+	private final static String ATTRIBUTE_IDENTIFIER_KEY_INFO = "urn:oasis:names:tc:xacml:1.0:subject:key-info";
 
 	/**
 	 * When acceptedAttributes is filled, then it makes the local variable
@@ -153,7 +153,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 				Attribute caPolicyOIDsInformation = new Attribute(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID);
 				caPolicyOIDsInformation.setDataType(Attribute.DT_STRING);
 
-				Attribute issuerDNInformation = new Attribute(ATTRIBUTE_SUBJECT_X509_ISSUER);
+				Attribute issuerDNInformation = new Attribute(ATTRIBUTE_IDENTIFIER_X509_ISSUER);
 				issuerDNInformation.setDataType(Attribute.DT_STRING);
 
 				// Get the end-entity X509 certificate.
@@ -174,7 +174,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 						subjectAttributes.add(caPolicyOIDsInformation);
 
 						// Check if its an Issuer DN
-					} else if (acceptedID.equals(ATTRIBUTE_SUBJECT_X509_ISSUER)) {
+					} else if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_X509_ISSUER)) {
 						String str = cert.getIssuerX500Principal().getName();
 						// Grab, convert and store the Issuer DN.
 						issuerDNInformation.getValues().add(OpensslNameUtils.convertFromRfc2253(str, false));
@@ -263,7 +263,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 			// Check whether the attribute ID is
 			// "urn:oasis:names:tc:xacml:1.0:subject:key-info". When true
 			// execute, else continue to next element.
-			if (attribute.getId().equals(ATTRIBUTE_KEY_INFO)) {
+			if (attribute.getId().equals(ATTRIBUTE_IDENTIFIER_KEY_INFO)) {
 				Set<Object> attributeValues = attribute.getValues();
 				// Used for other values
 				for (Object attributeValue : attributeValues) {
@@ -273,7 +273,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 						hasExecuted = true;
 					} catch (Exception e) {
 						throw new PIPProcessingException("The PEM string is not correct!");
-					}	
+					}
 					;
 				}
 			}
@@ -298,7 +298,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @throws KeyStoreException
 	 * @throws CertificateException
 	 */
-	public X509Certificate[] pemConvertToX509CertificateChain(String pem)
+	private X509Certificate[] pemConvertToX509CertificateChain(String pem)
 			throws CertificateException, IOException, KeyStoreException {
 		// Convert string to a UTF-8 encoded InputStream PEM object.
 		InputStream pemReader = new ByteArrayInputStream(pem.getBytes(StandardCharsets.UTF_8));

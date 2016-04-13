@@ -44,10 +44,10 @@ import eu.emi.security.authn.x509.proxy.OidAndValue;
  *        The ExtractorX509GenericPIPIniConfigurationParser class, is the
  *        Configuration parser for the ExtractorX509GenericPIP PIP.
  */
-public class IgtfStuffPIPIniConfigurationParser implements IniSectionConfigurationParser<PolicyInformationPoint> {
+public class InInfoFileIssuerDNMatcherIniConfigurationParser implements IniSectionConfigurationParser<PolicyInformationPoint> {
 
 	/** Class logger. */
-	private Logger log = LoggerFactory.getLogger(IgtfStuffPIPIniConfigurationParser.class);
+	private Logger log = LoggerFactory.getLogger(InInfoFileIssuerDNMatcherIniConfigurationParser.class);
 
 	/**
 	 * The Argus framework makes sure that when a PIP is created, the method
@@ -69,7 +69,7 @@ public class IgtfStuffPIPIniConfigurationParser implements IniSectionConfigurati
 	public PolicyInformationPoint parse(Ini.Section iniConfig, AbstractConfigurationBuilder<?> configBuilder)
 			throws ConfigurationException {
 		String pipid = iniConfig.getName();
-		IgtfStuffPIP pip = new IgtfStuffPIP(pipid);
+		InInfoFileIssuerDNMatcher pip = new InInfoFileIssuerDNMatcher(pipid);
 
 		return pip;
 	}
