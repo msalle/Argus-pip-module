@@ -340,7 +340,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * @return String The modified string or "" if none "subjectdn = " is found.
 	 */
 	private String contentRemoveSubjectDN(String input) {
-		if (input.contains("subjectdn")) {
+		if (input.startsWith("subjectdn") && !input.isEmpty()) {
 			return input.replaceFirst("(subjectdn(\\s)*[a-zA-Z_-]*=(\\s)*)", "");
 		}
 		return input;
