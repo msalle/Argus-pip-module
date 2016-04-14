@@ -138,6 +138,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 		X509Certificate cert = null;
 		Set<Subject> subjects = request.getSubjects();
 		Set<Attribute> subjectAttributes = null;
+		Boolean PIP_applied = false;
 
 		// If subjects is empty, the PIP will not run.
 		if (subjects.isEmpty()) {
@@ -165,6 +166,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 					// Check if its an CA policy oid
 					if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID)) {
+						PIP_applied = true;
 						List<String> policyOIDs = getPolicyOIDs(cert);
 
 						// List all found policy IDs
@@ -175,6 +177,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 						// Check if its an Issuer DN
 					} else if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_X509_ISSUER)) {
+						PIP_applied = true;
 						String str = cert.getIssuerX500Principal().getName();
 						// Grab, convert and store the Issuer DN.
 						issuerDNInformation.getValues().add(OpensslNameUtils.convertFromRfc2253(str, false));
@@ -187,10 +190,11 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 			}
 		} catch (Exception e) {
 			log.debug(e.getMessage());
-			e.printStackTrace();
+			throw new PIPProcessingException(e.getMessage());
+//			e.printStackTrace();
 		}
 
-		return true;
+		return PIP_applied;
 	}
 
 	/**
@@ -206,7 +210,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @throws IOException
 	 */
 	@SuppressWarnings("resource") // Added to supres errors that are not useful
-	private List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
+	protected List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
 		List<String> oidList = new LazyList<String>();
 
 		byte[] extvalue = cert.getExtensionValue(Extension.certificatePolicies.toString());

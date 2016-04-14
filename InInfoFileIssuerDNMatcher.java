@@ -300,7 +300,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 			contentLine = contentLine.trim();
 
 			if (contentLine.startsWith("subjectdn") && !contentLine.isEmpty()) {
-				contentLine = contentLine.replaceFirst("(subjectdn(\\s)*[a-zA-Z_-]*=(\\s)*)", "");
+				contentLine = contentLine.replaceFirst("^(subjectdn(\\s)*=(\\s)*)", "");
 				br.close();
 				return issuerDNMatcher(contentLine);
 			}

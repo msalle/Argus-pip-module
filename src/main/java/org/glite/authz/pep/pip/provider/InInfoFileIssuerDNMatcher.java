@@ -118,12 +118,13 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 		super(pipid);
 	}
 
-	/** 
+	/**
 	 * When the incoming request has no subjects then this PIP will NOT run.
-	 * This PIP will throw an Exception when CertificateIssuerDN is empty. This PIP takes an incoming request, it
-	 * extracts the Issuer DN incoming request. 
-	 * The extracted issuer DN is then compared to certificate issuer in all *.info files on the server.
-	 * This PIP fails when, there are no info files. 
+	 * This PIP will throw an Exception when CertificateIssuerDN is empty. This
+	 * PIP takes an incoming request, it extracts the Issuer DN incoming
+	 * request. The extracted issuer DN is then compared to certificate issuer
+	 * in all *.info files on the server. This PIP fails when, there are no info
+	 * files.
 	 *
 	 * The method that does all the work. The Argus framework makes sure that
 	 * when a PIP does apply to a request, the populateRequest(Request request)
@@ -140,18 +141,19 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	/** {@inheritDoc} */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
 		boolean PIP_applied = false;
-		
-		
+
 		try {
 			// Make the request editable and readable in other parts of the java
 			// code.
 			Set<Subject> subjects = request.getSubjects();
-
 			// List of all files in the grid-security directory
 			List<String> allInfoFiles = findAllInfoFiles();
-
 			String file = null;
-			
+
+			if (allInfoFiles == null) {
+				throw new PIPProcessingException("No info files match issuer dn!");
+			}
+
 			if (subjects.isEmpty()) {
 				log.debug("Request has no subject!");
 				return false;
@@ -184,10 +186,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 						PIP_applied = true;
 						policyInformation.getValues().add(file.replace(".info", ""));
 					}
-
-					if (allInfoFiles == null) {
-						throw new PIPProcessingException("No info files match issuer dn!");
-					}
 				}
 				// Actually adding all the information being send to the PEPD.
 				subject.getAttributes().add(policyInformation);
@@ -196,7 +194,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 			e.printStackTrace();
 		}
 		return PIP_applied;
-		// return true;
 	}
 
 	/**
@@ -206,7 +203,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            The String to decode
 	 * @return The decoded string
 	 */
-	private String urlDecode(String urlToDecode) {
+	public String urlDecode(String urlToDecode) {
 		int index;
 
 		// Loop over the urlToDecode string, check if % are present.
@@ -228,7 +225,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * 
 	 * @return A list of strings. The strings represent *.info file.
 	 */
-	private List<String> findAllInfoFiles() {
+	public List<String> findAllInfoFiles() {
 		List<String> infoFilesAll = new ArrayList<String>();
 		try {
 			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(INFO_FILE_LOCATION), "*.info");
@@ -251,7 +248,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            The request where the issuer DN is extracted from. from.
 	 * @return A string with "failed" or the issuer DN.
 	 */
-	private String getIssuerDNFromSubject(Set<Attribute> attributes) {
+	public String getIssuerDNFromSubject(Set<Attribute> attributes) {
 		StringBuilder strBuilder = new StringBuilder();
 
 		for (Attribute att : attributes) {
@@ -275,11 +272,10 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * @throws IOException
 	 *             Throws an exception when the file can't be passed.
 	 */
-	private Boolean issuerDNParser(String fileName) throws IOException, Exception {
+	public Boolean issuerDNParser(String fileName) throws IOException, Exception {
 		StringBuilder stringBuilder = new StringBuilder();
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
 		String contentLine = null;
-		List<String> infoFilesContents = new ArrayList<String>();
 
 		while ((contentLine = br.readLine()) != null) {
 
@@ -296,17 +292,21 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 
 			if (lineContainsHash(contentLine)) {
 				contentLine = removeHashAndRestOfline(contentLine);
+				if (contentLine.isEmpty()) {
+					continue;
+				}
 			}
 
 			contentLine = contentLine.trim();
+
+			if (contentLine.startsWith("subjectdn") && !contentLine.isEmpty()) {
+				contentLine = contentLine.replaceFirst("^(subjectdn(\\s)*=(\\s)*)", "");
+				br.close();
+				return issuerDNMatcher(contentLine);
+			}
 		}
+		
 		br.close();
-
-		contentLine = iterateContentRemovesSubjectDN(infoFilesContents);
-
-		if (issuerDNMatcher(contentLine)) {
-			return true;
-		}
 		return false;
 	}
 
@@ -333,24 +333,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	}
 
 	/**
-	 * Removes "subjectdn = " from the input strings.
-	 * 
-	 * @param infoFilesContentsToReturn
-	 *            list of strings to be checked.
-	 * @return String The modified string or "" if none "subjectdn = " is found.
-	 */
-	private String iterateContentRemovesSubjectDN(List<String> infoFilesContentsToReturn) {
-		String string;
-		for (int i = 0; i < infoFilesContentsToReturn.size(); i++) {
-			string = infoFilesContentsToReturn.get(i);
-			if (string.contains("subjectdn")) {
-				return string.replaceFirst("(\\s*subjectdn(\\s)*=(\\s)*)", "");
-			}
-		}
-		return "";
-	}
-
-	/**
 	 * Removes the "#" and everything behind the "#" from the input string.
 	 * 
 	 * @param input
@@ -361,11 +343,10 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 		int i = input.indexOf("#");
 
 		if (i == 0) {
-			return " ";
+			return "";
 		} else {
 			return input.substring(0, i - 1);
 		}
-		// return "";
 	}
 
 	/**
@@ -393,7 +374,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 		if (input.endsWith("\\")) {
 			return true;
 		}
-
 		return false;
 	}
 
@@ -412,7 +392,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 		if (i != -1) {
 			toReturn.deleteCharAt(i);
 		}
-
 		return toReturn.toString();
 	}
 }
