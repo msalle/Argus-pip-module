@@ -203,7 +203,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            The String to decode
 	 * @return The decoded string
 	 */
-	private String urlDecode(String urlToDecode) {
+	public String urlDecode(String urlToDecode) {
 		int index;
 
 		// Loop over the urlToDecode string, check if % are present.
@@ -225,7 +225,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * 
 	 * @return A list of strings. The strings represent *.info file.
 	 */
-	private List<String> findAllInfoFiles() {
+	public List<String> findAllInfoFiles() {
 		List<String> infoFilesAll = new ArrayList<String>();
 		try {
 			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(INFO_FILE_LOCATION), "*.info");
@@ -248,7 +248,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            The request where the issuer DN is extracted from. from.
 	 * @return A string with "failed" or the issuer DN.
 	 */
-	private String getIssuerDNFromSubject(Set<Attribute> attributes) {
+	public String getIssuerDNFromSubject(Set<Attribute> attributes) {
 		StringBuilder strBuilder = new StringBuilder();
 
 		for (Attribute att : attributes) {
@@ -272,7 +272,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * @throws IOException
 	 *             Throws an exception when the file can't be passed.
 	 */
-	private Boolean issuerDNParser(String fileName) throws IOException, Exception {
+	public Boolean issuerDNParser(String fileName) throws IOException, Exception {
 		StringBuilder stringBuilder = new StringBuilder();
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
 		String contentLine = null;
@@ -298,15 +298,15 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 			}
 
 			contentLine = contentLine.trim();
-			contentLine = contentRemoveSubjectDN(contentLine);
 
-			if (issuerDNMatcher(contentLine)) {
+			if (contentLine.startsWith("subjectdn") && !contentLine.isEmpty()) {
+				contentLine = contentLine.replaceFirst("(subjectdn(\\s)*[a-zA-Z_-]*=(\\s)*)", "");
 				br.close();
-				return true;
+				return issuerDNMatcher(contentLine);
 			}
 		}
+		
 		br.close();
-
 		return false;
 	}
 
@@ -330,20 +330,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * Removes "subjectdn = " from the input strings.
-	 * 
-	 * @param infoFilesContentsToReturn
-	 *            list of strings to be checked.
-	 * @return String The modified string or "" if none "subjectdn = " is found.
-	 */
-	private String contentRemoveSubjectDN(String input) {
-		if (input.startsWith("subjectdn") && !input.isEmpty()) {
-			return input.replaceFirst("(subjectdn(\\s)*[a-zA-Z_-]*=(\\s)*)", "");
-		}
-		return input;
 	}
 
 	/**
