@@ -77,12 +77,12 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	/**
 	 * Default String of CA policy OIDs attribute(s): {@value}
 	 */
-	public final static String ATTRIBUTE_IDENTIFIER_CA_POLICY_OID = "http://authz-interop.org/xacml/subject/ca-policy-oid";
+	private final static String ATTRIBUTE_IDENTIFIER_CA_POLICY_OID = "http://authz-interop.org/xacml/subject/ca-policy-oid";
 
 	/**
 	 * Default String of Issuer DN attribute(s): {@value}
 	 */
-	public final static String ATTRIBUTE_IDENTIFIER_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
+	private final static String ATTRIBUTE_IDENTIFIER_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
 	/**
 	 * Default String of key-info attribute(s): {@value}
@@ -253,7 +253,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @throws CertificateException
 	 * @throws PIPProcessingException
 	 */
-	private X509Certificate[] findPEMAttributeForConverson(Set<Attribute> attributes)
+	protected X509Certificate[] findPEMAttributeForConverson(Set<Attribute> attributes)
 			throws CertificateException, KeyStoreException, IOException, PIPProcessingException {
 		X509Certificate[] certificateChain = null;
 		boolean hasExecuted = false;

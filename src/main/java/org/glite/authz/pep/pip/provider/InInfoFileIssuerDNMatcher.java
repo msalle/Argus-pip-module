@@ -106,7 +106,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	/**
 	 * Contains a string of the certificate issuer DN.
 	 */
-	private static String CertificateIssuerDN;
+	protected static String CertificateIssuerDN;
 
 	/**
 	 * The constructor
@@ -155,8 +155,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 			}
 
 			if (subjects.isEmpty()) {
-				log.debug("Request has no subject!");
-				return false;
+				throw new PIPProcessingException("No subject found in request!!");
 			}
 
 			// Start iteration to find correct info files.
@@ -164,7 +163,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 				// Gets the Issuer DN from the subject and stores it in the
 				// CerificateIssuerDN variable.
 				CertificateIssuerDN = getIssuerDNFromSubject(subject.getAttributes());
-
 				// Checks if the certificate issuer equals null, if it equals
 				// null, skip the rest of the code and continue with a new loop.
 				if (CertificateIssuerDN == null) {
@@ -203,7 +201,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            The String to decode
 	 * @return The decoded string
 	 */
-	public String urlDecode(String urlToDecode) {
+	private String urlDecode(String urlToDecode) {
 		int index;
 
 		// Loop over the urlToDecode string, check if % are present.
@@ -225,7 +223,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * 
 	 * @return A list of strings. The strings represent *.info file.
 	 */
-	public List<String> findAllInfoFiles() {
+	private List<String> findAllInfoFiles() {
 		List<String> infoFilesAll = new ArrayList<String>();
 		try {
 			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(INFO_FILE_LOCATION), "*.info");
@@ -248,7 +246,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            The request where the issuer DN is extracted from. from.
 	 * @return A string with "failed" or the issuer DN.
 	 */
-	public String getIssuerDNFromSubject(Set<Attribute> attributes) {
+	protected String getIssuerDNFromSubject(Set<Attribute> attributes) {
 		StringBuilder strBuilder = new StringBuilder();
 
 		for (Attribute att : attributes) {
@@ -272,14 +270,22 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * @throws IOException
 	 *             Throws an exception when the file can't be passed.
 	 */
-	public Boolean issuerDNParser(String fileName) throws IOException, Exception {
+	protected Boolean issuerDNParser(String fileName) throws IOException, Exception {
 		StringBuilder stringBuilder = new StringBuilder();
 		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
 		String contentLine = null;
+		Pattern pattern = Pattern.compile("^subjectdn\\s*=\\s*");
 
 		while ((contentLine = br.readLine()) != null) {
 
-			if (lineEndsWithBackSlash(contentLine)) {
+			if (contentLine.contains("#")) {
+				contentLine = removeHashAndRestOfline(contentLine);
+				if (contentLine.isEmpty()) {
+					continue;
+				}
+			}
+
+			if (contentLine.endsWith("\\")) {
 				contentLine = removeTrailingSlash(contentLine);
 				stringBuilder.append(contentLine);
 				continue;
@@ -290,22 +296,14 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 				stringBuilder = new StringBuilder();
 			}
 
-			if (lineContainsHash(contentLine)) {
-				contentLine = removeHashAndRestOfline(contentLine);
-				if (contentLine.isEmpty()) {
-					continue;
-				}
-			}
-
 			contentLine = contentLine.trim();
-
-			if (contentLine.startsWith("subjectdn") && !contentLine.isEmpty()) {
+			if (pattern.matcher(contentLine).lookingAt() && !contentLine.isEmpty()) {
 				contentLine = contentLine.replaceFirst("^(subjectdn(\\s)*=(\\s)*)", "");
 				br.close();
 				return issuerDNMatcher(contentLine);
 			}
 		}
-		
+
 		br.close();
 		return false;
 	}
@@ -347,34 +345,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 		} else {
 			return input.substring(0, i - 1);
 		}
-	}
-
-	/**
-	 * Checks if the input has a "#".
-	 * 
-	 * @param input
-	 *            The String to be checked.
-	 * @return String true if string contains "#", false otherwise
-	 */
-	private Boolean lineContainsHash(String input) {
-		if (input.contains("#")) {
-			return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Checks if the input end with a "\\".
-	 * 
-	 * @param input
-	 *            The String to be tested.
-	 * @return Boolean true if ends with "\\", false otherwise
-	 */
-	private Boolean lineEndsWithBackSlash(String input) {
-		if (input.endsWith("\\")) {
-			return true;
-		}
-		return false;
 	}
 
 	/**
