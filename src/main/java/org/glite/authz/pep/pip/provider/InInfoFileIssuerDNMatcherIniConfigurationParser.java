@@ -49,6 +49,8 @@ public class InInfoFileIssuerDNMatcherIniConfigurationParser implements IniSecti
 	/** Class logger. */
 	private Logger log = LoggerFactory.getLogger(InInfoFileIssuerDNMatcherIniConfigurationParser.class);
 
+//	protected static String INFO_FILE_PATH = "infoFilePath";
+	protected static String TRUST_INFO_DIRECTORY = "infoFilePath";
 	/**
 	 * The Argus framework makes sure that when a PIP is created, the method
 	 * parse() is called. This method is always run.
@@ -69,8 +71,26 @@ public class InInfoFileIssuerDNMatcherIniConfigurationParser implements IniSecti
 	public PolicyInformationPoint parse(Ini.Section iniConfig, AbstractConfigurationBuilder<?> configBuilder)
 			throws ConfigurationException {
 		String pipid = iniConfig.getName();
-		InInfoFileIssuerDNMatcher pip = new InInfoFileIssuerDNMatcher(pipid);
+//		String[] acceptedInfoFilePath = parseValuesList(iniConfig.get(INFO_FILE_PATH));
+		String[] acceptedtrustInfoDir= parseValuesList(iniConfig.get(TRUST_INFO_DIRECTORY));
+		InInfoFileIssuerDNMatcher pip = new InInfoFileIssuerDNMatcher(pipid, acceptedtrustInfoDir.toString());
 
 		return pip;
+	}
+	
+	/**
+	 * Parses a space delimited list of values.
+	 * 
+	 * @param valuesList
+	 *            space delimited list of values, may be <code>null</code>.
+	 * 
+	 * @return array of values or <code>null</code> if valuesList is
+	 *         <code>null</code>
+	 */
+	private String[] parseValuesList(String valuesList) {
+		if (valuesList == null) {
+			return null;
+		}
+		return valuesList.trim().split("\\s");
 	}
 }

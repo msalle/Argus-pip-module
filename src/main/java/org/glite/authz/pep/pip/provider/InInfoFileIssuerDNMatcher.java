@@ -89,11 +89,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	private final Logger log = LoggerFactory.getLogger(InInfoFileIssuerDNMatcher.class);
 
 	/**
-	 * Default String of the info files location: {@value}
-	 */
-	private final static String INFO_FILE_LOCATION = "/etc/grid-security/certificates/";
-
-	/**
 	 * Default String of issuer DN attribute(s): {@value}
 	 */
 	private final static String ATTRIBUTE_IDENTIFIER_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
@@ -109,13 +104,20 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	protected static String CertificateIssuerDN;
 
 	/**
+	 * Contains a string of trusted .info file and certificates location.
+	 */
+	private static String acceptedtrustInfoDir;
+
+	/**
 	 * The constructor
 	 * 
 	 * @param pipid
 	 *            String consisting of the identifier of the pip.
 	 */
-	public InInfoFileIssuerDNMatcher(String pipid) {
+	public InInfoFileIssuerDNMatcher(String pipid, String acceptedtrustInfoDirLocal) {
 		super(pipid);
+
+		acceptedtrustInfoDir = acceptedtrustInfoDirLocal;
 	}
 
 	/**
@@ -226,7 +228,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	private List<String> findAllInfoFiles() {
 		List<String> infoFilesAll = new ArrayList<String>();
 		try {
-			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(INFO_FILE_LOCATION), "*.info");
+			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(acceptedtrustInfoDir), "*.info");
 			for (Path entry : stream) {
 				if (Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) {
 					infoFilesAll.add(entry.getFileName().toString());
@@ -272,7 +274,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 */
 	protected Boolean issuerDNParser(String fileName) throws IOException, Exception {
 		StringBuilder stringBuilder = new StringBuilder();
-		BufferedReader br = new BufferedReader(new FileReader(INFO_FILE_LOCATION + fileName));
+		BufferedReader br = new BufferedReader(new FileReader(acceptedtrustInfoDir + fileName));
 		String contentLine = null;
 		Pattern pattern = Pattern.compile("^subjectdn\\s*=\\s*");
 

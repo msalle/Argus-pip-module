@@ -29,12 +29,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.security.cert.X509Certificate;
 
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x509.PolicyInformation;
+import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.asn1.x509.Extension;
 
 import eu.emi.security.authn.x509.impl.CertificateUtils;
@@ -191,7 +194,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 		} catch (Exception e) {
 			log.debug(e.getMessage());
 			throw new PIPProcessingException(e.getMessage());
-//			e.printStackTrace();
+			// e.printStackTrace();
 		}
 
 		return PIP_applied;
@@ -257,6 +260,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 			throws CertificateException, KeyStoreException, IOException, PIPProcessingException {
 		X509Certificate[] certificateChain = null;
 		boolean hasExecuted = false;
+		String checkThisStr = null;
 
 		if (attributes.size() < 1) {
 			throw new PIPProcessingException("Request without subject element!");
@@ -271,14 +275,18 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 				Set<Object> attributeValues = attribute.getValues();
 				// Used for other values
 				for (Object attributeValue : attributeValues) {
+
 					// Checks if string contains pem formatted content
 					try {
-						certificateChain = pemConvertToX509CertificateChain((String) attributeValue);
+						checkThisStr = (String) attributeValue;
+						if (!isPEMString(checkThisStr)) {
+							checkThisStr = getCorrectPEMStingFromMallFormedPemString(checkThisStr);
+						}
+						certificateChain = pemConvertToX509CertificateChain(checkThisStr);
 						hasExecuted = true;
 					} catch (Exception e) {
 						throw new PIPProcessingException("The PEM string is not correct!");
 					}
-					;
 				}
 			}
 		}
@@ -308,5 +316,24 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 		InputStream pemReader = new ByteArrayInputStream(pem.getBytes(StandardCharsets.UTF_8));
 		// Convert InputStream PEM object to X509certificate object chain
 		return CertificateUtils.loadCertificateChain(pemReader, Encoding.PEM);
+	}
+
+	private Boolean isPEMString(String str) {
+		if (str.contains("-----BEGIN CERTIFICATE-----")) {
+			return true;
+		}
+		return false;
+	}
+
+	private String getCorrectPEMStingFromMallFormedPemString(String str) {
+		StringBuilder strBuilder = new StringBuilder();
+		String[] strArray = null;
+		strArray = str.split(",");
+
+		for (String strTMP : strArray) {
+			strBuilder.append("-----BEGIN CERTIFICATE-----\n" + strTMP + "\n-----END CERTIFICATE-----");
+		}
+
+		return strBuilder.toString();
 	}
 }
