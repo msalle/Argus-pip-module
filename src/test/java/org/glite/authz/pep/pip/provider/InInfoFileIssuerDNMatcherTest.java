@@ -24,6 +24,9 @@ import static org.junit.Assert.*;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.Set;
 
 import org.glite.authz.common.model.Attribute;
@@ -62,7 +65,54 @@ public class InInfoFileIssuerDNMatcherTest {
 	/**
 	 * Default String of trusted certificate directory: {@value}
 	 */
-	private final static String TRUSTED_CERTIFICATE_DIRECTORY = "/etc/grid-security/certificates/";
+	private final static String TRUSTED_CERTIFICATE_DIRECTORY = "/tmp/certificates";
+
+	private void createFilePath() {
+		File f = new File(TRUSTED_CERTIFICATE_DIRECTORY);
+		
+		if (!f.exists()) {
+			if (f.mkdir()) {
+				createrootCaDotInfo();
+			}
+		}
+
+	}
+
+	private void createrootCaDotInfo() {
+		File f = new File(TRUSTED_CERTIFICATE_DIRECTORY + "/rootCA.info");
+		PrintWriter writer = null;
+		try {
+			if(!f.exists()){
+				f.createNewFile();
+				f.setWritable(true);
+				writer = new PrintWriter(TRUSTED_CERTIFICATE_DIRECTORY + "/rootCA.info", "UTF-8");
+				writer.print(getRootCAInfoFileContents());
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			writer.close();
+		}
+	}
+
+	private String getRootCAInfoFileContents() {
+		String content = "# \n " + "# @(#)$Id: 16da7552.info,v 1.5 2015/06/18 09:44:55 pmacvsdg Exp $ \n "
+				+ "# Information for CA NIKHEF \n " + "# \n " + "alias = NIKHEF \n "
+				+ "ca_url = http://ca.dutchgrid.nl/medium/cacert.pem  \n "
+				+ "crl_url = http://ca.dutchgrid.nl/medium/cacrl.pem \n "
+				+ "policy_url = http://ca.dutchgrid.nl/medium/policy/ \n " + "email = ca@dutchgrid.nl \n "
+				+ " status = accredited:classic \n " + " url = http://ca.dutchgrid.nl/medium/ \n "
+				+ "version = 1.72 \n " + "sha1fp.0 = E5:FA:C3:3B:44:8F:26:1B:3D:D1:DE:BA:5F:EC:ED:35:A9:3F:23:21  \n "
+				+ "subjectdn = \"/C=NL/O=Example/OU=PDP/CN=rootCA\", \\ #test1234567j \n "
+				+ "    \"/DC=org/DC=cilogon/C=US/O=CILogon/CN=CILogon Silver CA 1\", \\ \n "
+				+ "    \"/C=NL/O=TERENA/CN=TERENA eScience Personal CA\", \\ \n "
+				+ "    \"/C=NL/ST=Noord-Holland/L=Amsterdam/O=TERENA/CN=TERENA eScience Personal CA 2\", \\ \n "
+				+ "    \"/C=US/ST=UT/L=Salt Lake City/O=The USERTRUST Network/OU=http://www.usertrust.com/CN=UTN-USERFirst-Client Authentication and Email\", \\  \n "
+				+ "    \"/C=NL/ST=Noord-Holland/L=Amsterdam/O=TERENA/CN=TERENA eScience Personal CA 3\", \\ \n "
+				+ "    \"/C=JP/O=NII/OU=HPCI/CN=HPCI CA\" \n " + " url = http://ca.dutchgrid.nl/medium/ \n";
+		return content;
+
+	}
 
 	/**
 	 * The method contains a valid X509 certificate
@@ -199,6 +249,8 @@ public class InInfoFileIssuerDNMatcherTest {
 		Attribute policyOID = new Attribute("http://authz-interop.org/xacml/subject/ca-policy-oid");
 		policyOID.setDataType(Attribute.DT_STRING);
 
+		createFilePath();
+
 		Set<Subject> subjects = globalRequest.getSubjects();
 
 		try {
@@ -237,7 +289,7 @@ public class InInfoFileIssuerDNMatcherTest {
 	 */
 	@Test
 	public void testPopulateRequestSuccess() {
-		InInfoFileIssuerDNMatcherPIP = new InInfoFileIssuerDNMatcher("asdasdasd", TRUSTED_CERTIFICATE_DIRECTORY);
+		InInfoFileIssuerDNMatcherPIP = new InInfoFileIssuerDNMatcher("asdasdasd", TRUSTED_CERTIFICATE_DIRECTORY + "/");
 		Boolean b;
 		try {
 			assertEquals(true, InInfoFileIssuerDNMatcherPIP.populateRequest(globalRequest));
