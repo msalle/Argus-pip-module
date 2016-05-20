@@ -54,7 +54,7 @@ public class ExtractorX509GenericPIPIniConfigurationParser
 	private Logger log = LoggerFactory.getLogger(ExtractorX509GenericPIPIniConfigurationParser.class);
 
 	/**
-	 * String of text used in the configuration of the PIP: {@value}
+	 * String of text used in the configuration of the PIP: acceptedProfileIDs.
 	 */
 	protected static String ACCEPTED_PROFILE_IDS_PROP = "acceptedProfileIDs";
 

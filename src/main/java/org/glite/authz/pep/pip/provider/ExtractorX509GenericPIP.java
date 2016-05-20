@@ -211,6 +211,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 *         strings.
 	 * 
 	 * @throws IOException
+	 *             Thrown when readObject method does not work.
 	 */
 	@SuppressWarnings("resource") // Added to supres errors that are not useful
 	protected List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
@@ -245,7 +246,8 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * from a Set of Attributes. Does this by finding the Attribute ID
 	 * corresponding to the required attribute. Quits PIP when no PEM string is
 	 * found in the content. The incoming request must have a
-	 * {@value ATTRIBUTE_KEY_INFO} attribute, if not quits the PIP.
+	 * urn:oasis:names:tc:xacml:1.0:subject:key-info attribute, if not quits the
+	 * PIP.
 	 *
 	 * @param attributes
 	 *            A {@link Set} filled with {@link Attribute}

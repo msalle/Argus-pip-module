@@ -117,6 +117,10 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	public InInfoFileIssuerDNMatcher(String pipid, String acceptedtrustInfoDirLocal) {
 		super(pipid);
 
+		if (!acceptedtrustInfoDirLocal.endsWith("//")) {
+			acceptedtrustInfoDirLocal = acceptedtrustInfoDirLocal + "//";
+		}
+
 		acceptedtrustInfoDir = acceptedtrustInfoDirLocal;
 	}
 
@@ -137,6 +141,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            request.
 	 * 
 	 * @throws PIPProcessingException
+	 *             Thrown when a unexpected error occurs.
 	 * 
 	 * @return boolean
 	 */
@@ -244,7 +249,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * Gathers the issuer DN from Attributes. Return the issuer DN when found,
 	 * if not found the method returns null.
 	 * 
-	 * @param req
+	 * @param attributes
 	 *            The request where the issuer DN is extracted from. from.
 	 * @return A string with "failed" or the issuer DN.
 	 */
@@ -271,6 +276,9 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 *            The {@link String} of the file to parse.
 	 * @throws IOException
 	 *             Throws an exception when the file can't be passed.
+	 * 
+	 * @throws Exception
+	 *             Thrown when file descriptor does not close properly
 	 */
 	protected Boolean issuerDNParser(String fileName) throws IOException, Exception {
 		StringBuilder stringBuilder = new StringBuilder();
