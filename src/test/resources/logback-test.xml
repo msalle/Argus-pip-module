@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+
+    <!--
+        Loggers define indicate which packages/categories are logged, at
+        which level, and to which appender. Levels: OFF, ERROR, WARN,
+        INFO, DEBUG, TRACE, ALL
+    -->
+    <logger name="org.glite.authz" level="trace"/>
+
+    <!-- OpenSAML loggers -->
+    <logger name="org.opensaml" level="warn" />
+    <logger name="org.opensaml.xml" level="warn" />
+
+    <!-- HttpClient loggers -->
+    <logger name="org.apache.commons.httpclient" level="info" />
+    <logger name="httpclient" level="info" />
+    <logger name="httpclient.wire" level="info" />
+
+    <!--
+        Logging appenders define where and how logging messages are
+        logged.
+    -->
+    <!-- <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>%d{HH:mm:ss.SSS} %-5level %logger{30}.%method - %msg%n</Pattern>
+        </layout>
+    </appender>
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <Target>System.err</Target>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+            <Pattern>%d{HH:mm:ss.SSS} %-5level %logger{30}.%method - %msg%n</Pattern>
+        </layout>
+    </appender> -->
+<appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>/home/rens/Argus/argus-pep-server-pip/target/surefire-reports/errorlog.log</file>
+        <append>true</append>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>/home/rens/Argus/argus-pep-server-pip/target/surefire-reports/errorlog.log_%d{yyyy-MM-dd}</fileNamePattern>
+            <maxHistory>90</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root>
+        <level value="info" />
+        <!-- appender-ref ref="STDOUT" / -->
+	<appender-ref ref="FILE" />
+    </root>
+
+</configuration>

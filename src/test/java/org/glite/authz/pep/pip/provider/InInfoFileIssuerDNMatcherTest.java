@@ -55,7 +55,7 @@ import org.slf4j.LoggerFactory;
  */
 public class InInfoFileIssuerDNMatcherTest {
 	InInfoFileIssuerDNMatcher InInfoFileIssuerDNMatcherPIP = null;
-	private final Logger log = LoggerFactory.getLogger(ExtractorX509GenericPIPTest.class);
+	private final Logger log = LoggerFactory.getLogger(InInfoFileIssuerDNMatcherTest.class);
 	String[] noAcceptedAttributes;
 	String[] acceptedAttributes;
 	Request globalRequest = new Request();
@@ -89,6 +89,7 @@ public class InInfoFileIssuerDNMatcherTest {
 				writer.print(getRootCAInfoFileContents());
 			}
 		} catch (IOException e) {
+			log.debug(e.getMessage());
 			e.printStackTrace();
 		} finally {
 			writer.close();
@@ -271,7 +272,7 @@ public class InInfoFileIssuerDNMatcherTest {
 			subjects.add(sub);
 			globalRequest.getSubjects().addAll(subjects);
 		} catch (Exception e) {
-
+			log.debug(e.getMessage());
 		}
 	}
 
@@ -294,6 +295,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(true, InInfoFileIssuerDNMatcherPIP.populateRequest(globalRequest));
 		} catch (Exception e) {
+			log.debug(e.getMessage());
 			fail(e.getMessage());
 		}
 
@@ -339,7 +341,7 @@ public class InInfoFileIssuerDNMatcherTest {
 			subjects.add(sub);
 			globalRequest.getSubjects().addAll(subjects);
 		} catch (Exception e) {
-
+			log.debug(e.getMessage());
 		}
 
 		InInfoFileIssuerDNMatcherPIP = new InInfoFileIssuerDNMatcher("asdasdasd", TRUSTED_CERTIFICATE_DIRECTORY);
@@ -347,6 +349,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(false, InInfoFileIssuerDNMatcherPIP.populateRequest(globalRequest));
 		} catch (Exception e) {
+			log.debug(e.getMessage());
 			fail(e.getMessage());
 		}
 	}
@@ -399,6 +402,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(false, InInfoFileIssuerDNMatcherPIP.populateRequest(globalRequest));
 		} catch (Exception e) {
+			log.debug(e.getMessage());
 			fail(e.getMessage());
 		}
 	}
@@ -453,6 +457,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(null, InInfoFileIssuerDNMatcherPIP.getIssuerDNFromSubject(subjectAttributes));
 		} catch (Exception e) {
+			log.debug(e.getMessage());
 			return;
 		}
 	}
@@ -478,7 +483,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(null, InInfoFileIssuerDNMatcherPIP.getIssuerDNFromSubject(subjectAttributes));
 		} catch (Exception e) {
-			System.out.println(e.getMessage());
+			log.debug(e.getMessage());
 		}
 	}
 
@@ -500,7 +505,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(true, InInfoFileIssuerDNMatcherPIP.issuerDNParser("rootCA.info"));
 		} catch (Exception e) {
-			e.getMessage();
+			log.debug(e.getMessage());
 		}
 	}
 
@@ -522,7 +527,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(false, InInfoFileIssuerDNMatcherPIP.issuerDNParser("AAACertificateServices.info"));
 		} catch (Exception e) {
-			e.getMessage();
+			log.debug(e.getMessage());
 		}
 	}
 
@@ -544,7 +549,7 @@ public class InInfoFileIssuerDNMatcherTest {
 		try {
 			assertEquals(false, InInfoFileIssuerDNMatcherPIP.issuerDNParser("BogusApplePie"));
 		} catch (Exception e) {
-			e.getMessage();
+			log.debug(e.getMessage());
 		}
 	}
 }

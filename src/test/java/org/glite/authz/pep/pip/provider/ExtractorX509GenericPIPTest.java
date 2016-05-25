@@ -168,13 +168,14 @@ public class ExtractorX509GenericPIPTest {
 			CertificateFactory cf = CertificateFactory.getInstance("X.509");
 			cert = (X509Certificate) cf.generateCertificate(inStream);
 		} catch (Exception e) {
+			log.debug(e.getMessage());
 		} finally {
 			try {
 				if (inStream != null) {
 					inStream.close();
 				}
 			} catch (Exception e2) {
-				System.out.println(e2.getMessage());
+				log.debug(e2.getMessage());
 			}
 		}
 		return cert;
@@ -236,7 +237,7 @@ public class ExtractorX509GenericPIPTest {
 			subjects.add(sub);
 			globalRequest.getSubjects().addAll(subjects);
 		} catch (Exception e) {
-			System.out.println("initialize() quatro: " + e.getMessage());
+			 log.debug(e.getMessage());
 			e.getMessage();
 		}
 	}
@@ -255,6 +256,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			extractorPIP = new ExtractorX509GenericPIP(null, null);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals("Policy Information Point ID may not be null or empty", e.getMessage());
 			return;
 		}
@@ -275,6 +277,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			extractorPIP = new ExtractorX509GenericPIP("", null);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals("Policy Information Point ID may not be null or empty", e.getMessage());
 			return;
 		}
@@ -295,6 +298,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			extractorPIP = new ExtractorX509GenericPIP(null, new String[20]);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals("Policy Information Point ID may not be null or empty", e.getMessage());
 			return;
 		}
@@ -315,6 +319,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			extractorPIP = new ExtractorX509GenericPIP("", acceptedAttributes);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals("Policy Information Point ID may not be null or empty", e.getMessage());
 			return;
 		}
@@ -340,6 +345,7 @@ public class ExtractorX509GenericPIPTest {
 					"ssvdkjsvfdkdsdvs@kbfkff!@#$%^&*()qwertyuiop[]asdfghjkl;'zxcvbnm,./QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?!@#$%^&*()_+-=",
 					extractorPIP.getId());
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			fail(e.getMessage());
 		}
 		return;
@@ -361,6 +367,7 @@ public class ExtractorX509GenericPIPTest {
 					acceptedAttributes);
 			assertEquals(true, extractorPIP.populateRequest(globalRequest));
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			fail("Expected a succes! Somehow a error got thrown");
 		}
 		return;
@@ -384,6 +391,7 @@ public class ExtractorX509GenericPIPTest {
 			extractorPIP = new ExtractorX509GenericPIP("ssvdkjsvfdkdsdvs@%^&*()_+-=", noAcceptedAttributes);
 			extractorPIP.populateRequest(globalRequest);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals("Non-handled attribute specified in ini file: http://glite.org/xacml/profile/grid-ce/1 .0",
 					e.getMessage());
 			return;
@@ -435,6 +443,7 @@ public class ExtractorX509GenericPIPTest {
 
 			extractorPIP.populateRequest(localRequest);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals("No pem String content in request! PIP ExtractorX509GenericPIP quited running...",
 					e.getMessage());
 			return;
@@ -459,6 +468,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			assertEquals("[1.2.840.113612.5.2.2.1]", extractorPIP.getPolicyOIDs(cert).toString());
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			fail(e.getMessage());
 		}
 		return;
@@ -481,6 +491,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			extractorPIP.getPolicyOIDs(cert);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals(null, e.getMessage());
 			return;
 		}
@@ -502,6 +513,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			extractorPIP.getPolicyOIDs(cert);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals(null, e.getMessage());
 			return;
 		}
@@ -530,6 +542,7 @@ public class ExtractorX509GenericPIPTest {
 			X509Certificate[] certChain = extractorPIP.findPEMAttributeForConverson(attributes);
 			assertEquals("CN=Bla, OU=PDP, O=Example, C=NL", certChain[0].getSubjectX500Principal().toString());
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			fail("Expected a success! Somehow a fail came up!");
 		}
 		return;
@@ -557,6 +570,7 @@ public class ExtractorX509GenericPIPTest {
 			attributes.add(attribute);
 			extractorPIP.findPEMAttributeForConverson(attributes);
 		} catch (Exception e) {
+			 log.debug(e.getMessage());
 			assertEquals("The PEM string is not correct!", e.getMessage());
 			return;
 		}
@@ -587,6 +601,7 @@ public class ExtractorX509GenericPIPTest {
 			attributes.add(attribute);
 			extractorPIP.findPEMAttributeForConverson(attributes);
 		} catch (Exception e) {
+			log.debug(e.getMessage());
 			assertEquals("No pem String content in request! PIP ExtractorX509GenericPIP quited running...",
 					e.getMessage());
 			return;
