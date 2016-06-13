@@ -388,11 +388,38 @@ public class ExtractorX509GenericPIPTest {
 	@Test
 	public void testNoAcceptedIDsPopulateRequest() {
 		try {
-			extractorPIP = new ExtractorX509GenericPIP("ssvdkjsvfdkdsdvs@%^&*()_+-=", noAcceptedAttributes);
-			extractorPIP.populateRequest(globalRequest);
+			Set<Attribute> subjectAttributes = new LazySet<Attribute>();
+			Attribute pemString = new Attribute("BogusKey-info");
+			pemString.setDataType(Attribute.DT_STRING);
+			Attribute policyOID = new Attribute("BogusOid");
+			policyOID.setDataType(Attribute.DT_STRING);
+			Subject sub = new Subject();
+			Request localRequest = new Request();
+			Set<Subject> subjects = localRequest.getSubjects();
+
+			extractorPIP = new ExtractorX509GenericPIP("BogusPIPID", noAcceptedAttributes);
+
+			policyOID.getValues().add("Bogus1OID");
+			policyOID.getValues().add("Bogus2OID");
+			policyOID.getValues().add("Bogus3OID");
+
+			Attribute issuerDNInformation = new Attribute("BogusBogusAttribute");
+			issuerDNInformation.setDataType(Attribute.DT_STRING);
+			issuerDNInformation.getValues().add("BogusBOGUSBOGUSBOGUSsajksajksad");
+
+			pemString.getValues().add(notAcceptedUserCertificate);
+
+			subjectAttributes.add(issuerDNInformation);
+			subjectAttributes.add(pemString);
+			subjectAttributes.add(policyOID);
+			sub.getAttributes().addAll(subjectAttributes);
+			subjects.add(sub);
+			localRequest.getSubjects().addAll(subjects);
+
+			extractorPIP.populateRequest(localRequest);
 		} catch (Exception e) {
 			 log.debug(e.getMessage());
-			assertEquals("Non-handled attribute specified in ini file: http://glite.org/xacml/profile/grid-ce/1 .0",
+			assertEquals("No pem String content in request! PIP ExtractorX509GenericPIP quited running...",
 					e.getMessage());
 			return;
 		}

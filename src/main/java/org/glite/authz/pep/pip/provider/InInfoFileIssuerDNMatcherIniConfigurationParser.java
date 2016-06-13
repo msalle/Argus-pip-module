@@ -49,8 +49,11 @@ public class InInfoFileIssuerDNMatcherIniConfigurationParser implements IniSecti
 	/** Class logger. */
 	private Logger log = LoggerFactory.getLogger(InInfoFileIssuerDNMatcherIniConfigurationParser.class);
 
+	
 //	protected static String INFO_FILE_PATH = "infoFilePath";
 	protected static String TRUST_INFO_DIRECTORY = "infoFilePath";
+	
+	private final static String DEFAULT_TRUST_INFO_DIRECTORY = "/etc/grid-security/certificates";
 	/**
 	 * The Argus framework makes sure that when a PIP is created, the method
 	 * parse() is called. This method is always run.
@@ -72,8 +75,18 @@ public class InInfoFileIssuerDNMatcherIniConfigurationParser implements IniSecti
 			throws ConfigurationException {
 		String pipid = iniConfig.getName();
 //		String[] acceptedInfoFilePath = parseValuesList(iniConfig.get(INFO_FILE_PATH));
-		String[] acceptedtrustInfoDir= parseValuesList(iniConfig.get(TRUST_INFO_DIRECTORY));
-		InInfoFileIssuerDNMatcher pip = new InInfoFileIssuerDNMatcher(pipid, acceptedtrustInfoDir.toString());
+		String[] acceptedtrustInfoDirArray= parseValuesList(iniConfig.get(TRUST_INFO_DIRECTORY));
+		String acceptedtrustInfoDir = null;
+		if(acceptedtrustInfoDirArray.length == 0){
+			acceptedtrustInfoDir =  DEFAULT_TRUST_INFO_DIRECTORY;
+		}else if (acceptedtrustInfoDirArray.length > 1){
+			throw new ConfigurationException("Multiple trusted info dirs specified!");
+		}else {
+			acceptedtrustInfoDir = acceptedtrustInfoDirArray[0];
+		}
+		log.debug("Using trust info directory" + acceptedtrustInfoDir);
+			
+		InInfoFileIssuerDNMatcher pip = new InInfoFileIssuerDNMatcher(pipid, acceptedtrustInfoDir);
 
 		return pip;
 	}

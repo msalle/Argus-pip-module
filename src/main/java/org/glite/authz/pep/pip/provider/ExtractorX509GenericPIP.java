@@ -166,7 +166,6 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 				// Loop over each accepted attribute .
 				for (int i = 0; i < acceptedAttributes_.length; i++) {
 					acceptedID = acceptedAttributes_[i];
-
 					// Check if its an CA policy oid
 					if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID)) {
 						PIP_applied = true;

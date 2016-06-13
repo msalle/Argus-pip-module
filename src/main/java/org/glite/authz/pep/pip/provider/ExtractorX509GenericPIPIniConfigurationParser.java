@@ -56,7 +56,7 @@ public class ExtractorX509GenericPIPIniConfigurationParser
 	/**
 	 * String of text used in the configuration of the PIP: acceptedProfileIDs.
 	 */
-	protected static String ACCEPTED_PROFILE_IDS_PROP = "acceptedProfileIDs";
+	protected static String ACCEPTED_PROFILE_IDS_PROP = "acceptedAttributeIDs";
 
 	/**
 	 * The Argus framework makes sure that when a PIP is created, the method

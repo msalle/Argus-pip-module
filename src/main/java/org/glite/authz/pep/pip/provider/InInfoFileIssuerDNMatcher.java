@@ -148,7 +148,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	/** {@inheritDoc} */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
 		boolean PIP_applied = false;
-
 		try {
 			// Make the request editable and readable in other parts of the java
 			// code.
@@ -157,8 +156,8 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 			List<String> allInfoFiles = findAllInfoFiles();
 			String file = null;
 
-			if (allInfoFiles == null) {
-				throw new PIPProcessingException("No info files match issuer dn!");
+			if (allInfoFiles == null || allInfoFiles.size() == 0) {
+				throw new PIPProcessingException("No info files!");
 			}
 
 			if (subjects.isEmpty()) {
@@ -170,6 +169,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 				// Gets the Issuer DN from the subject and stores it in the
 				// CerificateIssuerDN variable.
 				CertificateIssuerDN = getIssuerDNFromSubject(subject.getAttributes());
+				// CertificateIssuerDN = (CertificateIssuerDN);
 				// Checks if the certificate issuer equals null, if it equals
 				// null, skip the rest of the code and continue with a new loop.
 				if (CertificateIssuerDN == null) {
@@ -179,7 +179,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 				// Create the attributes to be send to PEPD.
 				Attribute policyInformation = new Attribute(ATTRIBUTE_IDENTIFIER_CA_POLICY_NAMES);
 				policyInformation.setDataType(Attribute.DT_STRING);
-
+				log.debug("allInfoFiles.size() = " + allInfoFiles.size());
 				// Loop over all found info files.
 				for (int i = 0; i < allInfoFiles.size(); i++) {
 					// Use one specific info files
@@ -187,8 +187,10 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 
 					// Matches CertificateIssuerDN to contents if info file
 					// specified in "file".
+					log.debug("File: " + file);
 					if (issuerDNParser(file)) {
 						PIP_applied = true;
+
 						policyInformation.getValues().add(file.replace(".info", ""));
 					}
 				}
@@ -230,18 +232,29 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * 
 	 * @return A list of strings. The strings represent *.info file.
 	 */
-	private List<String> findAllInfoFiles() {
+	private List<String> findAllInfoFiles() throws IOException {
 		List<String> infoFilesAll = new ArrayList<String>();
+		DirectoryStream<Path> stream = null;
 		try {
-			DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(acceptedtrustInfoDir), "*.info");
+			stream = Files.newDirectoryStream(Paths.get(acceptedtrustInfoDir), "*.info");
+		} catch (Exception e) {
+			log.error(e.getMessage());
+			return infoFilesAll;
+		}
+
+		try {
 			for (Path entry : stream) {
 				if (Files.isRegularFile(entry, LinkOption.NOFOLLOW_LINKS)) {
 					infoFilesAll.add(entry.getFileName().toString());
 				}
 			}
+
 		} catch (Exception e) {
-			log.debug(e.getMessage());
+			log.error(e.getMessage());
+		} finally {
+			stream.close();
 		}
+
 		return infoFilesAll;
 	}
 
@@ -255,10 +268,10 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 */
 	protected String getIssuerDNFromSubject(Set<Attribute> attributes) {
 		StringBuilder strBuilder = new StringBuilder();
-
 		for (Attribute att : attributes) {
 			if (att.getId().matches(ATTRIBUTE_IDENTIFIER_X509_ISSUER) == true) {
 				strBuilder.append(att.getValues().iterator().next());
+				log.debug(ATTRIBUTE_IDENTIFIER_X509_ISSUER + " = " + strBuilder.toString().trim());
 				return strBuilder.toString().trim();
 			}
 		}
@@ -282,39 +295,43 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 */
 	protected Boolean issuerDNParser(String fileName) throws IOException, Exception {
 		StringBuilder stringBuilder = new StringBuilder();
-		BufferedReader br = new BufferedReader(new FileReader(acceptedtrustInfoDir + fileName));
+		FileReader readerFile = new FileReader(acceptedtrustInfoDir + fileName);
+		BufferedReader br = new BufferedReader(readerFile);
 		String contentLine = null;
 		Pattern pattern = Pattern.compile("^subjectdn\\s*=\\s*");
 
-		while ((contentLine = br.readLine()) != null) {
+		try {
+			while ((contentLine = br.readLine()) != null) {
+				if (contentLine.contains("#")) {
+					contentLine = removeHashAndRestOfline(contentLine);
+					contentLine.contains("contentLine = " + contentLine);
+					if (contentLine.isEmpty()) {
+						continue;
+					}
+				}
 
-			if (contentLine.contains("#")) {
-				contentLine = removeHashAndRestOfline(contentLine);
-				if (contentLine.isEmpty()) {
+				if (contentLine.endsWith("\\")) {
+					contentLine = removeTrailingSlash(contentLine);
+					stringBuilder.append(contentLine);
 					continue;
+
+				} else {
+					stringBuilder.append(contentLine);
+					contentLine = stringBuilder.toString();
+					stringBuilder = new StringBuilder();
+				}
+
+				contentLine = contentLine.trim();
+				if (pattern.matcher(contentLine).lookingAt() && !contentLine.isEmpty()) {
+					contentLine = contentLine.replaceFirst("^(subjectdn(\\s)*=(\\s)*)", "");
+					return issuerDNMatcher(contentLine);
 				}
 			}
-
-			if (contentLine.endsWith("\\")) {
-				contentLine = removeTrailingSlash(contentLine);
-				stringBuilder.append(contentLine);
-				continue;
-
-			} else {
-				stringBuilder.append(contentLine);
-				contentLine = stringBuilder.toString();
-				stringBuilder = new StringBuilder();
-			}
-
-			contentLine = contentLine.trim();
-			if (pattern.matcher(contentLine).lookingAt() && !contentLine.isEmpty()) {
-				contentLine = contentLine.replaceFirst("^(subjectdn(\\s)*=(\\s)*)", "");
-				br.close();
-				return issuerDNMatcher(contentLine);
-			}
+		} catch (Exception e) {
+			log.debug(e.getMessage());
+		} finally {
+			br.close();
 		}
-
-		br.close();
 		return false;
 	}
 
@@ -330,7 +347,6 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	private Boolean issuerDNMatcher(String input) {
 		String[] issuerDNInfoFileArray = input.split("(?<=\\\"),");
 		String decodedCertificateIssuerDN;
-
 		for (int b = 0; b < issuerDNInfoFileArray.length; b++) {
 			decodedCertificateIssuerDN = urlDecode(issuerDNInfoFileArray[b].trim());
 			if (decodedCertificateIssuerDN.matches("\"" + CertificateIssuerDN + "\"")) {
