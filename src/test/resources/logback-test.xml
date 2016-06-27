@@ -34,10 +34,12 @@
         </layout>
     </appender> -->
 <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>/home/rens/Argus/argus-pep-server-pip/target/surefire-reports/errorlog.log</file>
+<!--        <file>/home/rens/Argus/argus-pep-server-pip/target/surefire-reports/errorlog.log</file>-->
+        <file>target/surefire-reports/errorlog.log</file>
         <append>true</append>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>/home/rens/Argus/argus-pep-server-pip/target/surefire-reports/errorlog.log_%d{yyyy-MM-dd}</fileNamePattern>
+<!--            <fileNamePattern>/home/rens/Argus/argus-pep-server-pip/target/surefire-reports/errorlog.log_%d{yyyy-MM-dd}</fileNamePattern>-->
+            <fileNamePattern>target/surefire-reports/errorlog.log_%d{yyyy-MM-dd}</fileNamePattern>
             <maxHistory>90</maxHistory>
         </rollingPolicy>
         <encoder>

@@ -66,7 +66,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.commons.lang.StringUtils;
 
-import org.bouncycastle.jcajce.provider.symmetric.AES.OFB;
+//import org.bouncycastle.jcajce.provider.symmetric.AES.OFB;
 
 import eu.emi.security.authn.x509.impl.CertificateUtils;
 import eu.emi.security.authn.x509.impl.CertificateUtils.Encoding;
@@ -113,6 +113,8 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * 
 	 * @param pipid
 	 *            String consisting of the identifier of the pip.
+	 * @param acceptedtrustInfoDirLocal
+	 *            Directory containing info files
 	 */
 	public InInfoFileIssuerDNMatcher(String pipid, String acceptedtrustInfoDirLocal) {
 		super(pipid);
@@ -282,11 +284,11 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * Parses the file from the input String. Method parses all lines in the
 	 * .info file. All lines are parsed one by one. Checks if line ends with a
 	 * "\" if yes, remove the slash. Checks if line contains hask. If yes,
-	 * removes the # and all text behind it. Returns true if info file is found,
-	 * false otherwise.
+	 * removes the # and all text behind it.
 	 * 
 	 * @param fileName
 	 *            The {@link String} of the file to parse.
+	 * @return true if info file is found, false otherwise.
 	 * @throws IOException
 	 *             Throws an exception when the file can't be passed.
 	 * 

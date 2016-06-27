@@ -68,6 +68,7 @@ public class InInfoFileIssuerDNMatcherIniConfigurationParser implements IniSecti
 	 *            An configuration builder.
 	 * 
 	 * @throws ConfigurationException
+	 *            in case of configuration errors
 	 * 
 	 * @return boolean
 	 */

@@ -495,7 +495,7 @@ public class ExtractorX509GenericPIPTest {
 		try {
 			assertEquals("[1.2.840.113612.5.2.2.1]", extractorPIP.getPolicyOIDs(cert).toString());
 		} catch (Exception e) {
-			 log.debug(e.getMessage());
+			log.error(e.getMessage());
 			fail(e.getMessage());
 		}
 		return;

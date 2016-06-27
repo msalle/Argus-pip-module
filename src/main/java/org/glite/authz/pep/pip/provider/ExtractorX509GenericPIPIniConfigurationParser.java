@@ -71,7 +71,7 @@ public class ExtractorX509GenericPIPIniConfigurationParser
 	 * @param configBuilder
 	 *            An configuration builder.
 	 * 
-	 * @throws ConfigurationException
+	 * @throws ConfigurationException in case of error
 	 * 
 	 * @return boolean
 	 */
