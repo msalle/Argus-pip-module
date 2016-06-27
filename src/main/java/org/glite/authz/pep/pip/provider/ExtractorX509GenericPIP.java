@@ -38,7 +38,9 @@ import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x509.PolicyInformation;
 import org.bouncycastle.util.encoders.Base64;
-import org.bouncycastle.asn1.x509.Extension;
+
+//import org.bouncycastle.asn1.x509.X509Extension;
+//import org.bouncycastle.asn1.x509.Extension;
 
 import eu.emi.security.authn.x509.impl.CertificateUtils;
 import eu.emi.security.authn.x509.impl.CertificateUtils.Encoding;
@@ -103,7 +105,6 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @param acceptedAttributes
 	 *            String array of accepted attributes.
 	 * 
-	 * @throws Exception
 	 */
 	public ExtractorX509GenericPIP(String pipid, String[] acceptedAttributes) {
 		super(pipid);
@@ -133,6 +134,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 *            request.
 	 * 
 	 * @throws PIPProcessingException
+		      in case of errors
 	 * 
 	 * @return boolean
 	 */
@@ -206,7 +208,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @param cert
 	 *            The x509Certificate where the Policy OID(s) are extracted
 	 *            from.
-	 * @return a List<String> instance. The list is filled with Policy OIDs
+	 * @return a List of String instance. The list is filled with Policy OIDs
 	 *         strings.
 	 * 
 	 * @throws IOException
@@ -216,10 +218,20 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	protected List<String> getPolicyOIDs(X509Certificate cert) throws IOException {
 		List<String> oidList = new LazyList<String>();
 
-		byte[] extvalue = cert.getExtensionValue(Extension.certificatePolicies.toString());
+		String certPolicies = null;
+		try {
+		    Class<?> extension = Class.forName("org.bouncycastle.asn1.x509.Extension");
+//		    java.lang.reflect.Field field = extension.getField("certificatePolicies");
+//		    Object fieldvalue = field.get(extension);
+//		    certPolicies = ((org.bouncycastle.asn1.ASN1ObjectIdentifier)fieldvalue).toString();
+		    certPolicies = extension.getField("certificatePolicies").get(extension).toString();
+		} catch (Exception e) { // NoSuchFieldException or ClassNotFoundException
+		    certPolicies = org.bouncycastle.asn1.x509.X509Extension.certificatePolicies.toString();
+		}
+		byte[] extvalue = cert.getExtensionValue(certPolicies);
 
 		if (extvalue == null) {
-			log.debug("No valid certificate policies found!");
+			log.warn("No valid certificate policies found!");
 			return null;
 		}
 
@@ -252,13 +264,11 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 *            A {@link Set} filled with {@link Attribute}
 	 * 
 	 * @return a X509Certificate[] objects instance
-	 * @throws IOException
-	 * @throws KeyStoreException
-	 * @throws CertificateException
-	 * @throws PIPProcessingException
+	 * @throws PIPProcessingException in case of error
 	 */
 	protected X509Certificate[] findPEMAttributeForConverson(Set<Attribute> attributes)
 			throws CertificateException, KeyStoreException, IOException, PIPProcessingException {
+//			throws PIPProcessingException {
 		X509Certificate[] certificateChain = null;
 		boolean hasExecuted = false;
 		String checkThisStr = null;
@@ -284,6 +294,8 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 							checkThisStr = getCorrectPEMStingFromMallFormedPemString(checkThisStr);
 						}
 						certificateChain = pemConvertToX509CertificateChain(checkThisStr);
+						if (certificateChain.length == 0)
+						    throw new PIPProcessingException("Empty certificate chain");
 						hasExecuted = true;
 					} catch (Exception e) {
 						throw new PIPProcessingException("The PEM string is not correct!");
