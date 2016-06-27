@@ -18,14 +18,16 @@
         <dependency>
             <groupId>org.glite.authz</groupId>
             <artifactId>argus-pepd</artifactId>
-            <version>1.7.1</version>
+<!--            <version>1.7.2</version>-->
+<!--            <version>1.6.2</version>-->
+            <version>${pepdversion}</version>
         </dependency>
-<dependency>
-  <groupId>junit</groupId>     <!-- NOT org.junit here -->
-  <artifactId>junit</artifactId>
-  <version>4.11</version>
-  <scope>test</scope>
-</dependency>
+	<dependency>
+	  <groupId>junit</groupId>     <!-- NOT org.junit here -->
+	  <artifactId>junit</artifactId>
+	  <version>4.11</version>
+	  <scope>test</scope>
+	</dependency>
 </dependencies>
 <build>
 <plugins>
