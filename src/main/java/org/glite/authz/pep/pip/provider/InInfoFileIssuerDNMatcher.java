@@ -233,6 +233,7 @@ public class InInfoFileIssuerDNMatcher extends AbstractPolicyInformationPoint {
 	 * Strings. The Strings contain all *.info files.
 	 * 
 	 * @return A list of strings. The strings represent *.info file.
+	 * @throws IOException when
 	 */
 	private List<String> findAllInfoFiles() throws IOException {
 		List<String> infoFilesAll = new ArrayList<String>();

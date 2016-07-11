@@ -75,7 +75,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 	/**
 	 * String array of attribute(s) found in the incoming request that are
-	 * accepted: {@value}
+	 * accepted
 	 */
 	private String[] acceptedAttributes_ = null;
 
@@ -139,6 +139,9 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * @return boolean
 	 */
 	public boolean populateRequest(Request request) throws PIPProcessingException {
+
+	    log.debug("Starting PIP");
+
 		// Declaration of used variables
 		X509Certificate cert = null;
 		Set<Subject> subjects = request.getSubjects();
@@ -147,15 +150,17 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 		// If subjects is empty, the PIP will not run.
 		if (subjects.isEmpty()) {
-			log.debug("Request has no subject!");
+			log.error("Request has no subject!");
 			return false;
 		}
+	    log.debug("Found "+subjects.size()+" subjects");
 
 		try {
 
 			for (Subject subject : subjects) {
 				String acceptedID = null;
 				subjectAttributes = subject.getAttributes();
+				log.debug("Found "+subjectAttributes.size()+" subjectAttributes");
 				Attribute caPolicyOIDsInformation = new Attribute(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID);
 				caPolicyOIDsInformation.setDataType(Attribute.DT_STRING);
 
@@ -164,14 +169,23 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 
 				// Get the end-entity X509 certificate.
 				cert = ProxyUtils.getEndUserCertificate(findPEMAttributeForConverson(subjectAttributes));
+				if (cert == null)   {
+				    log.error("Certificate is unset");
+				    continue;
+				}
+				log.debug("Found cert");
+				
 
 				// Loop over each accepted attribute .
 				for (int i = 0; i < acceptedAttributes_.length; i++) {
 					acceptedID = acceptedAttributes_[i];
+					log.debug("Trying attribute "+acceptedID);
 					// Check if its an CA policy oid
 					if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_CA_POLICY_OID)) {
 						PIP_applied = true;
+						log.debug("Trying to get policy OIDs");
 						List<String> policyOIDs = getPolicyOIDs(cert);
+						log.debug("Found "+policyOIDs.size()+" OIDs");
 
 						// List all found policy IDs
 						for (String str : policyOIDs) {
@@ -183,17 +197,19 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 					} else if (acceptedID.equals(ATTRIBUTE_IDENTIFIER_X509_ISSUER)) {
 						PIP_applied = true;
 						String str = cert.getIssuerX500Principal().getName();
+						log.debug("Found issuer DN "+str);
 						// Grab, convert and store the Issuer DN.
 						issuerDNInformation.getValues().add(OpensslNameUtils.convertFromRfc2253(str, false));
 						subjectAttributes.add(issuerDNInformation);
 						// If none of the above, abort!
 					} else {
+						log.error("Non-handled attribute specified in ini file: " + acceptedID);
 						throw new Exception("Non-handled attribute specified in ini file: " + acceptedID);
 					}
 				}
 			}
 		} catch (Exception e) {
-			log.debug(e.getMessage());
+			log.error(e.getMessage());
 			throw new PIPProcessingException(e.getMessage());
 			// e.printStackTrace();
 		}
@@ -219,7 +235,7 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 		List<String> oidList = new LazyList<String>();
 
 		String certPolicies = null;
-		try {
+/*		try {
 		    Class<?> extension = Class.forName("org.bouncycastle.asn1.x509.Extension");
 //		    java.lang.reflect.Field field = extension.getField("certificatePolicies");
 //		    Object fieldvalue = field.get(extension);
@@ -227,24 +243,38 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 		    certPolicies = extension.getField("certificatePolicies").get(extension).toString();
 		} catch (Exception e) { // NoSuchFieldException or ClassNotFoundException
 		    certPolicies = org.bouncycastle.asn1.x509.X509Extension.certificatePolicies.toString();
+		}*/
+		certPolicies = org.bouncycastle.asn1.x509.X509Extension.certificatePolicies.toString();
+		if (certPolicies == null)   {
+		    log.error("certPolicies is null");
+		    return null;
 		}
+		log.debug("Found certPolicies = "+certPolicies);
+
+		log.debug("Found cert: "+cert.toString());
+
 		byte[] extvalue = cert.getExtensionValue(certPolicies);
 
 		if (extvalue == null) {
 			log.warn("No valid certificate policies found!");
 			return null;
 		}
+		log.debug("Found extvalue");
 
 		// Convert extension blob into DER octet string
+//		DEROctetString oct = (DEROctetString) (new ASN1InputStream(new ByteArrayInputStream(extvalue)).readObject());
 		DEROctetString oct = (DEROctetString) (new ASN1InputStream(new ByteArrayInputStream(extvalue)).readObject());
+		log.debug("Found oct: "+oct==null ? "null" : "non-null");
 		// ANS1 sequence generated from the DER octet string
 		ASN1Sequence seq = (ASN1Sequence) new ASN1InputStream(new ByteArrayInputStream(oct.getOctets())).readObject();
+		log.debug("Found seq: "+seq==null ? "null" : "non-null");
 
 		/* Loop over all policy OIDs */
 		for (int pos = 0; pos < seq.size(); pos++) {
 			if (PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId() != null) {
 				oidList.add(PolicyInformation.getInstance(seq.getObjectAt(pos)).getPolicyIdentifier().getId());
 			} else {
+				log.error("Policy does not exist!");
 				throw new IOException("Policy does not exist!");
 			}
 		}
@@ -265,6 +295,9 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 * 
 	 * @return a X509Certificate[] objects instance
 	 * @throws PIPProcessingException in case of error
+	 * @throws CertificateException when
+	 * @throws KeyStoreException when
+	 * @throws IOException when
 	 */
 	protected X509Certificate[] findPEMAttributeForConverson(Set<Attribute> attributes)
 			throws CertificateException, KeyStoreException, IOException, PIPProcessingException {
@@ -319,9 +352,9 @@ public class ExtractorX509GenericPIP extends AbstractPolicyInformationPoint {
 	 *            A PEM formatted String
 	 * @return a X509Certificate[] chain
 	 * 
-	 * @throws IOException
-	 * @throws KeyStoreException
-	 * @throws CertificateException
+	 * @throws IOException when
+	 * @throws KeyStoreException when
+	 * @throws CertificateException when
 	 */
 	private X509Certificate[] pemConvertToX509CertificateChain(String pem)
 			throws CertificateException, IOException, KeyStoreException {
