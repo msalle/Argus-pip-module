@@ -81,7 +81,7 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 
     /** Array of accepted attribute ID(s) in incoming request that will be
      * populated. Default none */
-    private static AcceptedAttr[] acceptedAttrIDs = null;
+    private static AcceptedAttr[] acceptedAttrIDs = new AcceptedAttr[0];
 
 
     /**
@@ -103,7 +103,7 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 	super(pipid);
 
 	// Set list of accepted attributes
-	if (acceptedAttrIDs.length > 0)
+	if (acceptedAttrIDs!=null && acceptedAttrIDs.length > 0)
 	    this.acceptedAttrIDs = acceptedAttrIDs;
     }
 
@@ -131,18 +131,24 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 	long t0=System.nanoTime();
 	boolean pipprocessed=false;
 
+	// Do we need to do anything?
+	if (acceptedAttrIDs==null || acceptedAttrIDs.length==0)
+	    return false;
+
 	// Get all subjects from the request, should be at least one, warn when
 	// there are more than 1
 	Set<Subject> subjects = request.getSubjects();
 	if (subjects.isEmpty())	{
 	    log.error("Request has no subjects");
-	    throw new PIPProcessingException("No subject found in request!!");
+	    throw new PIPProcessingException("No subject found in request");
 	}
 	if (subjects.size()>1)
 	    log.warn("Request has "+subjects.size()+" subjects, taking first match");
 	
 	// Loop over all subjects to look for end-entity certificate
 	for (Subject subject : subjects) {
+	    if (subject==null)
+		continue;
 	    Set<Attribute> attributes = subject.getAttributes();
 	    X509Certificate cert = getCertFromSubject(attributes);
 	    if (cert == null)
@@ -164,7 +170,7 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 			attributes.add(attrCAPolicyOids);
 			pipprocessed=true;
 			// Log that we succeeded
-			log.debug("Added attribute \""+ATTR_CA_POLICY_OID+"\"");
+			log.debug("Added attribute \""+ATTR_CA_POLICY_OID+"\" ("+oids.length+" value(s))");
 			break;
 		    case ACCEPT_ATTR_X509_ISSUER:
 			String str = cert.getIssuerX500Principal().getName();
@@ -178,7 +184,7 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 			attributes.add(attrIssuerDN);
 			pipprocessed=true;
 			// Log that we succeeded
-			log.debug("Added attribute \""+ATTR_X509_ISSUER+"\"");
+			log.debug("Added attribute \""+ATTR_X509_ISSUER+"\" ("+value+")");
 			break;
 		    default:
 			throw new PIPProcessingException("Unknown attribute "+acceptedAttrIDs[i]+" specified");
@@ -200,22 +206,30 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
     private X509Certificate getCertFromSubject(Set<Attribute> attributes)	{
 	// Loop over all attributes, looking for ATTR_X509_ISSUER
 	for (Attribute attr: attributes) {
+	    if (attr==null)
+		continue;
 	    if (ATTR_KEY_INFO.equals(attr.getId()))	{
 		Set<Object> attributeValues = attr.getValues();
 		for (Object value: attributeValues)    {
+		    if (value==null)
+			continue;
 		    InputStream pemReader = new ByteArrayInputStream(((String)value).getBytes(StandardCharsets.UTF_8));
 		    try {
 			// Do we need to close pemReader?
 			X509Certificate[] chain = CertificateUtils.loadCertificateChain(pemReader, Encoding.PEM);
 			X509Certificate cert = ProxyUtils.getEndUserCertificate(chain);
 			return cert;
-		    } catch (IOException e) {
+		    } catch (Exception e) {
+			// This might be a IOException, but also for invalid
+			// base64 a StringIndexOutOfBoundsException or a
+			// DecoderException
 			log.error("Parsing value as a certificate failed: "+e.getMessage());
 		    }
 		}
 	    }
 	}
 	// No cert found
+	log.info("No valid certificate found in set of attributes");
 	return null;
     }
 
@@ -227,11 +241,15 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
     private String[] getCAPolicyOids(X509Certificate cert)  {
 	List<String> oidList = new LazyList<String>();
 
+	// OID for certificate_policies (=2.5.29.32)
 	String certPolicies = X509Extension.certificatePolicies.toString();
+
+	// Grab bare extension value from certificate
 	byte[] extvalue = cert.getExtensionValue(certPolicies);
 	if (extvalue==null)
 	    return null;
-	
+
+	// Try to parse the raw bytes as ASN1Sequence
 	ASN1Sequence seq;
 	try {
 	    DEROctetString oct=(DEROctetString)(new ASN1InputStream(new ByteArrayInputStream(extvalue)).readObject());
@@ -241,10 +259,10 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 	    return null;
 	}
 
+	// Parse the ASN1Sequence as policy information values
 	for (int pos = 0; pos < seq.size(); pos++) {
 	    PolicyInformation policyInfo = PolicyInformation.getInstance(seq.getObjectAt(pos));
-	    String id = policyInfo.getPolicyIdentifier().getId();
-	    oidList.add(id);
+	    oidList.add(policyInfo.getPolicyIdentifier().getId());
 	}
 
 	// Return oidList
