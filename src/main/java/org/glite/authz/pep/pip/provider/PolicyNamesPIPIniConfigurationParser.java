@@ -27,6 +27,8 @@ import org.glite.authz.common.config.ConfigurationException;
 import org.glite.authz.common.config.IniSectionConfigurationParser;
 import org.glite.authz.pep.pip.PolicyInformationPoint;
 
+import java.io.IOException;
+
 import org.ini4j.Ini;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,20 +48,20 @@ public class PolicyNamesPIPIniConfigurationParser
      * where the .info files are located.
      * @see PolicyNamesPIP#setTrustDir(String)
      */
-    private final String TRUSTDIR_KEY = "trustInfoDir";
+    private final static String TRUSTDIR_KEY = "trustInfoDir";
 
     /**
      * Name of the {@value} property in ini file which defines the time interval
      * after which the .info files are reprocessed.
      * @see PolicyNamesPIP#setUpdateInterval(long)
      */
-    private final String UPDATEINTERVAL_KEY = "updateInterval";
+    private final static String UPDATEINTERVAL_KEY = "updateInterval";
 
     /**
      * Name of the {@value} property in ini file which defines the name of the
      * attribute set by this PIP.
      * @see PolicyNamesPIP#setAttributeName(String) */
-    private final String ATTRIBUTENAME_KEY = "policyNamesAttribute";
+    private final static String ATTRIBUTENAME_KEY = "policyNamesAttribute";
 
     /**
      * {@inheritDoc}
@@ -92,14 +94,22 @@ public class PolicyNamesPIPIniConfigurationParser
 		try {
 		    updateinterval_long = Integer.parseInt(updateinterval);
 		} catch (NumberFormatException e)	{
-		    throw new ConfigurationException("Cannot convert "+UPDATEINTERVAL_KEY+" = "+updateinterval+" to a long");
+		    throw new ConfigurationException(
+			"Cannot convert "+UPDATEINTERVAL_KEY+" = "+
+			updateinterval+" to a long");
 		}
 		if (updateinterval_long<=0)
 		    throw new ConfigurationException(UPDATEINTERVAL_KEY+" should be >0");
 	    }
 
 	    // Instantiate PIP
-	    PolicyNamesPIP pip = new PolicyNamesPIP(id, trust_dir);
+	    PolicyNamesPIP pip;
+	    try {
+		pip = new PolicyNamesPIP(id, trust_dir);
+	    } catch (IOException e) {
+		throw new ConfigurationException(
+		    "Could not instantiate PIP: "+e.getMessage());
+	    }
 
 	    // Set update interval
 	    if (updateinterval_long>0) {

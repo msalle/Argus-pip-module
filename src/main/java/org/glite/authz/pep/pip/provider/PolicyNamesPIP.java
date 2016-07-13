@@ -58,43 +58,55 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     /** Class logger instance */
     private final Logger log = LoggerFactory.getLogger(PolicyNamesPIP.class);
 
+
     /** Default name of issuer DN attribute ({@value}) */
-    private final static String ATTR_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
+    protected final static String ATTR_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
     /** Default name of CA policy names attribute ({@value}) */
-    private final static String ATTR_CA_POLICY_NAMES = "http://authz-interop.org/xacml/subject/ca-policy-names";
+    protected final static String ATTR_CA_POLICY_NAMES = "http://authz-interop.org/xacml/subject/ca-policy-names";
 
     /** Default trust dir ({@value}) */
-    private final static String TRUST_DIR = "/etc/grid-security/certificates";
+    protected final static String TRUST_DIR = "/etc/grid-security/certificates";
 
     /** Extension of info file ({@value}) */
-    private final static String FILE_SFX = ".info";
+    protected final static String FILE_SFX = ".info";
 
     /** Key in info file starting subject DNs ({@value}) */
-    private static final String SUBJECT_KEY = "subjectdn";
+    protected final static String SUBJECT_KEY = "subjectdn";
 
     /** Default time interval (in msec) after which info files will be
      * reprocessed ({@value}) */
-    private static final long UPDATEINTERVAL = 6*3600*1000;
+    protected final static long UPDATEINTERVAL = 6*3600*1000;
 
 
     ////////////////////////////////////////////////////////////////////////
-    // Class variables, settable
+    // instance variables, settable
     ////////////////////////////////////////////////////////////////////////
      
     /** Time interval (in msec) after which info files will be
      * reprocessed, default {@link #UPDATEINTERVAL}.
      * @see #setUpdateInterval(long) */
-    private static long updateInterval = UPDATEINTERVAL;
+    private long update_interval = UPDATEINTERVAL;
 
     /** Info file directory, default {@link #TRUST_DIR}.
      * @see #setTrustDir(String)
      * @see #TRUST_DIR */
-    private static String trust_dir=TRUST_DIR;
+    private String trust_dir=TRUST_DIR;
 
     /** Name of attribute set by PIP, default {@link #ATTR_CA_POLICY_NAMES}
      * @see #setAttributeName(String) */
-    private static String attributeName = ATTR_CA_POLICY_NAMES;
+    private String attribute_name = ATTR_CA_POLICY_NAMES;
+
+    ////////////////////////////////////////////////////////////////////////
+    // Internal variables, internal use only
+    ////////////////////////////////////////////////////////////////////////
+    
+    /** Last time when info files where being processed. */
+    private long lastUpdated=0;
+
+    /** Cached list of info file {@link Entry} */
+    private ArrayList<Entry> cacheList=null;
+
 
 
     /** Internal type of info file entries */
@@ -143,17 +155,6 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 
     
     ////////////////////////////////////////////////////////////////////////
-    // Internal variables, internal use only
-    ////////////////////////////////////////////////////////////////////////
-    
-    /** Last time when info files where being processed. */
-    private static long lastUpdated=0;
-
-    /** Cached list of info file {@link Entry} */
-    private static ArrayList<Entry> cacheList=null;
-
-
-    ////////////////////////////////////////////////////////////////////////
     // Setter methods
     ////////////////////////////////////////////////////////////////////////
      
@@ -164,16 +165,21 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
      * @see #UPDATEINTERVAL
      */
     protected void setUpdateInterval(long msecs)    {
-	updateInterval=msecs;
+	update_interval=msecs;
     }
    
     /**
-     * Sets the trust_dir, default {@link #TRUST_DIR}.
-     * @param trust_dir directory where info files are located.
+     * Sets the {@link #trust_dir} for this instance when different from the
+     * current value. It also resets the {@link #cacheList} since that is no
+     * longer valid.
+     * @param trustDir directory where info files are located.
      * @see #TRUST_DIR
      */
-    protected void setTrustDir(String trust_dir)    {
-	this.trust_dir=trust_dir;
+    protected void setTrustDir(String trustDir)    {
+	if (trustDir!=null && !trust_dir.equals(trustDir))    {
+	    trust_dir=trustDir;
+	    cacheList=null;
+	}
     }
 
     /**
@@ -181,31 +187,27 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
      * @param attributeName name of attribute set by this PIP
      */
     protected void setAttributeName(String attributeName)    {
-	this.attributeName=attributeName;
+	attribute_name=attributeName;
     }
   
 
     /**
      * constructor for a {@link PolicyNamesPIP} instance, specifying both the
-     * pipid and the {@link #trust_dir}. When trust_dir is {@code null}, use the
-     * default {@link #trust_dir}.
+     * pipid and the class {@link #trust_dir}. When trust_dir is {@code null},
+     * keep the current trust_dir {@link #trust_dir}.
      * @param pipid ID for this PIP
-     * @param trust_dir directory containing info files
+     * @param trustDir directory containing info files
      * @see #PolicyNamesPIP(String)
+     * @throws IOException in case of I/O errors
      */
-    public PolicyNamesPIP(String pipid, String trust_dir)	{
+    public PolicyNamesPIP(String pipid, String trustDir) throws IOException	{
 	super(pipid);
 
 	// Set internal trust_dir
-	if (trust_dir != null)
-	    this.trust_dir=trust_dir;
+	setTrustDir(trustDir);
 
 	// Initial reading/parsing of info files
-	try {
-	    updateList(trust_dir);
-	} catch (IOException e) {
-	    log.error("I/O error reading info files: "+e.getMessage());
-	}
+	updateList(trust_dir);
     }
 
     /**
@@ -213,8 +215,9 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
      * #trust_dir}.
      * @param pipid ID for this PIP
      * @see #PolicyNamesPIP(String,String)
+     * @throws IOException in case of I/O errors
      */
-    public PolicyNamesPIP(String pipid)	{
+    public PolicyNamesPIP(String pipid)	throws IOException {
 	this(pipid, null);
     }
 
@@ -239,7 +242,7 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	Set<Subject> subjects = request.getSubjects();
 	if (subjects.isEmpty())	{
 	    log.error("Request has no subjects");
-	    throw new PIPProcessingException("No subject found in request!!");
+	    throw new PIPProcessingException("No subject found in request");
 	}
 	if (subjects.size()>1)
 	    log.warn("Request has "+subjects.size()+" subjects, taking first match");
@@ -251,14 +254,16 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	    for (Attribute attr: attributes) {
 		if (ATTR_X509_ISSUER.equals(attr.getId())) {
 		    // Take first value (it should be singlevalued)
-		    issuerdn = attr.getValues().iterator().next().toString();
+		    Object tmp = attr.getValues().iterator().next();
+		    issuerdn = (tmp!=null ? tmp.toString() : null);
 		    break;
 		}
 	    }
 
 	    // Did we find the issuer attribute?
 	    if (issuerdn==null)	{
-		log.info("Subject has no "+ATTR_X509_ISSUER+" attribute set");
+		log.info("Subject has no or invalid "+ATTR_X509_ISSUER+
+			 " attribute set");
 		continue;
 	    }
 
@@ -282,7 +287,7 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 
 	    // Create new attribute and add the policy names
 	    Attribute attr_policynames =
-		new Attribute(attributeName,
+		new Attribute(attribute_name,
 			      Attribute.DT_STRING);
 	    Set<Object> values = attr_policynames.getValues();
 	    for (int i=0; i<policynames.length; i++)
@@ -291,7 +296,7 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	    // Add to the current subject
 	    attributes.add(attr_policynames);
 	    pipprocessed=true;
-	    log.debug("Added attribute \""+attributeName+"\"");
+	    log.debug("Added attribute \""+attribute_name+"\"");
 	}
 
 	// Log statistics
@@ -313,10 +318,14 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	long now=Calendar.getInstance().getTimeInMillis();
 
 	// Check whether cached list needs updating
-	if (now-lastUpdated > updateInterval)	{
+	if (now-lastUpdated > update_interval)	{
 	    lastUpdated=now; // prevent other threads from updating
 	    updateList();
 	}
+
+	// Protect against empty cacheList
+	if (cacheList == null)
+	    return new String[0];
 
 	// Copy the cacheList pointer, it might get updated.
 	ArrayList<Entry> entryList = cacheList;
@@ -363,7 +372,12 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	ArrayList<Entry> newList = new ArrayList<Entry>();
 
 	// Get list of info files
-	ArrayList<Path> infofiles=getInfoFiles(trust_dir);
+	ArrayList<Path> infofiles;
+	try {
+	    infofiles=getInfoFiles(trust_dir);
+	} catch (IOException e)	{
+	    throw new IOException("getInfoFiles() failed: "+e.getMessage());
+	}
 
 	// Initialize counters
 	int nentries_before=0, nupdated=0;
@@ -430,7 +444,7 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	lastUpdated=Calendar.getInstance().getTimeInMillis();
    
 	// Log statistics
-	log.debug("Updated list: "+(System.nanoTime()-t0)/1000000.0+" msec ("+
+	log.debug("Updated list ("+trust_dir+"): "+(System.nanoTime()-t0)/1000000.0+" msec ("+
 	    (nentries_after-nupdated)+" copied, "+
 	    nupdated+" updated, "+
 	    (nentries_before-nentries_after)+" removed, "+
@@ -454,12 +468,16 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	    }
 	};
 
+	// Protect against null trust_dir
+	if (trust_dir==null)
+	    throw new IOException("Trust dir is null");
+
 	// Get all files as a stream
 	DirectoryStream<Path> stream=null;
 	try {
 	    stream = Files.newDirectoryStream(Paths.get(trust_dir), filter);
 	} catch(IOException e)	{
-	    throw e;
+	    throw new IOException("Trust dir has problems: "+e.getMessage());
 	}
 
 	// Initialize file array
@@ -492,7 +510,7 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	try {
 	    reader=Files.newBufferedReader(path, Charset.defaultCharset());
 	} catch (IOException e)	{
-	    throw e;
+	    throw new IOException("Cannot open "+name+": "+e.getMessage());
 	}
 	
 	// initialize line
@@ -527,14 +545,14 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	    // Try to close, this might throw a new IOException. We're throwing
 	    // one in any case.
 	    reader.close();
-	    throw e;
+	    throw new IOException("Reading from "+name+" failed: "+e.getMessage());
 	}
 
 	// Close reader
 	try {
 	    reader.close();
 	} catch (IOException e)	{
-	    throw e;
+	    throw new IOException("Closing "+name+" failed: "+e.getMessage());
 	}
 
 	// Did we find the KEY?
