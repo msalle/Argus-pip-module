@@ -193,8 +193,8 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 
     /**
      * constructor for a {@link PolicyNamesPIP} instance, specifying both the
-     * pipid and the class {@link #trust_dir}. When trust_dir is {@code null},
-     * keep the current trust_dir {@link #trust_dir}.
+     * pipid and the {@link #trust_dir}. When trust_dir is {@code null}, keep
+     * the current trust_dir {@link #trust_dir}.
      * @param pipid ID for this PIP
      * @param trustDir directory containing info files
      * @see #PolicyNamesPIP(String)
