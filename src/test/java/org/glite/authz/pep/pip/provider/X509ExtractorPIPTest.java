@@ -101,13 +101,13 @@ public class X509ExtractorPIPTest {
 
 
     /**
-     * Setup a new {@link X509Extractor_PIP} PIP and set the accepted attributes
+     * Setup a new {@link X509ExtractorPIP} PIP and set the accepted attributes
      * to all of them
      */
     @Before
     public void initialize() throws Exception {
 	log.debug("Creating PIP");
-        pip = new X509ExtractorPIP("X509Extractor_PIP");
+        pip = new X509ExtractorPIP("X509ExtractorPIP");
 	pip.setAcceptedAttrIDs(
 	    new AcceptedAttr[]{
 		AcceptedAttr.ACCEPT_ATTR_X509_ISSUER,
@@ -116,7 +116,7 @@ public class X509ExtractorPIPTest {
         pip.start();
     }
 
-    /** Stop the {@link X509Extractor_PIP} PIP */
+    /** Stop the {@link X509ExtractorPIP} PIP */
     @After
     public void finalize() throws Exception {
 	log.debug("Stopping PIP");
