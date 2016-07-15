@@ -21,29 +21,18 @@
 
 package org.glite.authz.pep.pip.provider;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.glite.authz.pep.pip.provider.policynamespip.Cache;
+
 import org.glite.authz.common.model.Request;
 import org.glite.authz.common.model.Subject;
 import org.glite.authz.common.model.Attribute;
 
-import java.util.Set;
-
 import org.glite.authz.pep.pip.PIPProcessingException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.nio.file.Path;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Paths;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.io.BufferedReader;
-import java.net.URLDecoder;
-import java.nio.file.attribute.FileTime;
-import java.util.Calendar;
-import java.nio.charset.Charset;
-
+import java.util.Set;
 import java.io.IOException;
 import java.text.ParseException;
 
@@ -59,108 +48,61 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     private final Logger log = LoggerFactory.getLogger(PolicyNamesPIP.class);
 
 
-    /** Default name of issuer DN attribute ({@value}) */
-    protected final static String ATTR_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
+    ////////////////////////////////////////////////////////////////////////
+    // constants
+    ////////////////////////////////////////////////////////////////////////
+     
+    /** Default name of input issuer DN attribute ({@value}) */
+    public final static String ATTR_X509_ISSUER = "http://authz-interop.org/xacml/subject/subject-x509-issuer";
 
-    /** Default name of CA policy names attribute ({@value}) */
-    protected final static String ATTR_CA_POLICY_NAMES = "http://authz-interop.org/xacml/subject/ca-policy-names";
+    /** Default name of output CA policy names attribute ({@value}) */
+    public final static String ATTR_CA_POLICY_NAMES = "http://authz-interop.org/xacml/subject/ca-policy-names";
 
     /** Default trust dir ({@value}) */
-    protected final static String TRUST_DIR = "/etc/grid-security/certificates";
+    public final static String TRUST_DIR = "/etc/grid-security/certificates";
 
-    /** Extension of info file ({@value}) */
-    protected final static String FILE_SFX = ".info";
-
-    /** Key in info file starting subject DNs ({@value}) */
-    protected final static String SUBJECT_KEY = "subjectdn";
-
-    /** Default time interval (in msec) after which info files will be
-     * reprocessed ({@value}) */
-    protected final static long UPDATEINTERVAL = 6*3600*1000;
+    /** Default time interval (in msec) after which info files cache will be
+     * refreshed ({@value}) */
+    public final static long UPDATEINTERVAL = 6*3600*1000;
 
 
     ////////////////////////////////////////////////////////////////////////
     // instance variables, settable
     ////////////////////////////////////////////////////////////////////////
      
-    /** Time interval (in msec) after which info files will be
-     * reprocessed, default {@link #UPDATEINTERVAL}.
+    /** Time interval (in msec) after which info files cache will be
+     * refreshed, default {@link #UPDATEINTERVAL}.
      * @see #setUpdateInterval(long) */
     private long update_interval = UPDATEINTERVAL;
 
-    /** Info file directory, default {@link #TRUST_DIR}.
-     * @see #setTrustDir(String)
-     * @see #TRUST_DIR */
+    /** Info file directory (trust dir), default {@link #TRUST_DIR}
+     * @see #setTrustDir(String) */
     private String trust_dir=TRUST_DIR;
 
     /** Name of attribute set by PIP, default {@link #ATTR_CA_POLICY_NAMES}
      * @see #setAttributeName(String) */
     private String attribute_name = ATTR_CA_POLICY_NAMES;
 
+
     ////////////////////////////////////////////////////////////////////////
-    // Internal variables, internal use only
+    // instance variables, internal use only
     ////////////////////////////////////////////////////////////////////////
     
-    /** Last time when info files where being processed. */
-    private long lastUpdated=0;
+    /** Whether we're updating and replacing the {@link Cache} */
+    private boolean updating=false;
 
-    /** Cached list of info file {@link Entry} */
-    private ArrayList<Entry> cacheList=null;
+    /** Cache of info file directory
+     * @see Cache */
+    private Cache cache = null;
 
 
-
-    /** Internal type of info file entries */
-    private static class Entry	{
-	/** full path of this info file */
-	Path path;
-	/** name of this info entry (basename of info file) */
-	String name;
-	/** last modification time of this info file */
-	FileTime modified;
-	/** array of subject DNs for this info file */
-	String[] subjectdns;
-
-	/**
-	 * Constructor, setting all variables
-	 * @param path path of the info file
-	 * @param name name of the policy
-	 * @param modified last modification time of info file
-	 * @param subjectdns array of subject DNs valid for this policy
-	 */
-	private Entry(Path path, String name, FileTime modified, String[] subjectdns)	{
-	    this.path=path;
-	    this.name=name;
-	    this.modified=modified;
-	    this.subjectdns=subjectdns;
-	}
-
-	/**
-	 * Constructor, setting only name and modified from path.
-	 * @param path path of the info file
-	 * @param subjectdns array of subject DNs valid for this policy
-	 */
-	private Entry(Path path, String[] subjectdns) {
-	    try {
-		this.modified=Files.getLastModifiedTime(path);
-	    } catch (IOException e) { // Cannot initialize: use 1/1/1970
-		this.modified=FileTime.fromMillis(0);
-	    }
-	    String name=path.getFileName().toString();
-	    this.name=name.substring(0, name.length()-FILE_SFX.length());
-	    this.path=path;
-	    this.subjectdns=subjectdns;
-	}
-	
-    }
-
-    
     ////////////////////////////////////////////////////////////////////////
-    // Setter methods
+    // setter methods
     ////////////////////////////////////////////////////////////////////////
      
     /**
-     * Sets the time interval (in msec) after which info files will be
-     * reprocessed, default {@link #UPDATEINTERVAL}.
+     * Sets the {@link #update_interval} (in msec) after which info files cache
+     * will be reprocessed.
      * @param msecs number of millisecs between updates
      * @see #UPDATEINTERVAL
      */
@@ -169,32 +111,37 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     }
    
     /**
-     * Sets the {@link #trust_dir} for this instance when different from the
-     * current value. It also resets the {@link #cacheList} since that is no
-     * longer valid.
-     * @param trustDir directory where info files are located.
-     * @see #TRUST_DIR
-     */
-    protected void setTrustDir(String trustDir)    {
-	if (trustDir!=null && !trust_dir.equals(trustDir))    {
-	    trust_dir=trustDir;
-	    cacheList=null;
-	}
-    }
-
-    /**
-     * Sets the output attribute name, default {@link #ATTR_CA_POLICY_NAMES}.
+     * Sets the output attribute name.
      * @param attributeName name of attribute set by this PIP
+     * @see #ATTR_CA_POLICY_NAMES
      */
     protected void setAttributeName(String attributeName)    {
 	attribute_name=attributeName;
     }
-  
 
     /**
+     * Sets the {@link #trust_dir} for this instance, when different from the
+     * current value. In that case it also resets the {@link #cache} since that
+     * is no longer valid. Note that this is not thread-safe.
+     * @param trustDir directory where info files are located.
+     * @see #TRUST_DIR
+     * @throws IOException upon I/O errors in updating the {@link Cache}
+     */
+    protected void setTrustDir(String trustDir) throws IOException    {
+	// If argument is different from current one, update
+	if (trust_dir==null || !trust_dir.equals(trustDir)) {
+	    trust_dir=trustDir;
+	    cache = new Cache(trust_dir);
+	}
+    }
+
+    ////////////////////////////////////////////////////////////////////////
+    // Constructors
+    ////////////////////////////////////////////////////////////////////////
+     
+    /**
      * constructor for a {@link PolicyNamesPIP} instance, specifying both the
-     * pipid and the {@link #trust_dir}. When trust_dir is {@code null}, keep
-     * the current trust_dir {@link #trust_dir}.
+     * pipid and the {@link #trust_dir}.
      * @param pipid ID for this PIP
      * @param trustDir directory containing info files
      * @see #PolicyNamesPIP(String)
@@ -204,30 +151,34 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	super(pipid);
 
 	// Set internal trust_dir
-	setTrustDir(trustDir);
+	trust_dir=trustDir;
 
-	// Initial reading/parsing of info files
-	updateList(trust_dir);
+	// Initialize cache
+	cache = new Cache(trustDir);
     }
 
     /**
      * constructor for a {@link PolicyNamesPIP} instance using default {@link
-     * #trust_dir}.
+     * #TRUST_DIR}.
      * @param pipid ID for this PIP
      * @see #PolicyNamesPIP(String,String)
      * @throws IOException in case of I/O errors
      */
     public PolicyNamesPIP(String pipid)	throws IOException {
-	this(pipid, null);
+	this(pipid, TRUST_DIR);
     }
 
 
+    ////////////////////////////////////////////////////////////////////////
+    // Main PIP method
+    ////////////////////////////////////////////////////////////////////////
+     
     /**
      * {@inheritDoc}
      * This PIP adds a {@value #ATTR_CA_POLICY_NAMES} attribute to the
      * corresponding subjects. The value(s) of this attribute are the short
-     * names of all the {@value #FILE_SFX} files that match the value of the
-     * {@value ATTR_X509_ISSUER} attribute.
+     * names of all the {@value Cache#FILE_SFX} files that match the
+     * value of the {@value ATTR_X509_ISSUER} attribute.
      * @param request the incoming request.
      * @throws PIPProcessingException in case of errors.
      * @return boolean: true when attribute has been populated, false otherwise.
@@ -302,295 +253,52 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	// Log statistics
 	log.debug("PIP parsing took "+(System.nanoTime()-t0)/1000000.0+" msec");
 
-	// No issuer DN found, attribute not set.
+	// Return true when attribute is set
 	return pipprocessed;
-
     }
 
+
+    ////////////////////////////////////////////////////////////////////////
+    // Private methods
+    ////////////////////////////////////////////////////////////////////////
+     
     /**
      * Tries to find given subjectDN in the info files in {@link #trust_dir}.
      * @param dn String subject DN to look for
      * @return array of String with all the matching info files
-     * @throws IOException upon reading errors in updateList
+     * @throws IOException upon reading errors in updating the {@link Cache}
      */
-    protected String[] findSubjectDN(String dn) throws IOException   {
-	// Is the cached list valid?
-	long now=Calendar.getInstance().getTimeInMillis();
+    private String[] findSubjectDN(String dn) throws IOException   {
+	// Update the cache (when needed)
+	updateCache();
 
-	// Check whether cached list needs updating
-	if (now-lastUpdated > update_interval)	{
-	    lastUpdated=now; // prevent other threads from updating
-	    updateList();
-	}
-
-	// Protect against empty cacheList
-	if (cacheList == null)
+	// Protect against empty cache
+	if (cache == null)
 	    return new String[0];
 
-	// Copy the cacheList pointer, it might get updated.
-	ArrayList<Entry> entryList = cacheList;
-
-	// Initialize an empty list of policynames
-	ArrayList<String> policynames = new ArrayList<String>();
-
-	// Loop over the cached list and look for match
-	for (int i=0; i<entryList.size(); i++)    {
-	    Entry entry=entryList.get(i);
-	    String[] dns=entry.subjectdns;
-	    for (int j=0; j<dns.length; j++)	{
-		if (dn.equals(dns[j]))  {
-		    policynames.add(entry.name);
-		    break; // subject dn loop
-		}
-	    }
-	}
-	return policynames.toArray(new String[0]);
+	return cache.matchIssuerDN(dn);
     }
-
+    
     /**
-     * Update internal, cached list of parsed-out info files in the previously
-     * set or default trust_dir.
-     * @see #updateList(String)
-     * @see #setTrustDir(String)
-     * @throws IOException upon reading errors
+     * Update the internal {@link Cache} when needed
+     * @throws IOException upon I/O errors in updating the {@link Cache}
      */
-    protected void updateList() throws IOException    {
-	updateList(trust_dir);
-    }
+    private void updateCache() throws IOException    {
+	if (updating)
+	    return;
 
-    /**
-     * Update internal, cached list of parsed-out info files in the specified
-     * trust_dir.
-     * @param trust_dir directory containing .info files
-     * @see #updateList()
-     * @throws IOException upon reading errors
-     */
-    protected void updateList(String trust_dir) throws IOException    {
-	long t0=System.nanoTime();
+	// set lock: prevent other threads from updating
+	updating=true;
 
-	// Will be new list of Entries
-	ArrayList<Entry> newList = new ArrayList<Entry>();
-
-	// Get list of info files
-	ArrayList<Path> infofiles;
-	try {
-	    infofiles=getInfoFiles(trust_dir);
-	} catch (IOException e)	{
-	    throw new IOException("getInfoFiles() failed: "+e.getMessage());
-	}
-
-	// Initialize counters
-	int nentries_before=0, nupdated=0;
-
-	// Get cached list of entries
-	if (cacheList!=null)	{
-	    ArrayList<Entry> oldList=cacheList;
-	    nentries_before=oldList.size();
-	    // Check old list and copy into new list after updating
-	    for (int j=0; j<nentries_before; j++) {
-		Entry entry=oldList.get(j);
-		Path path = entry.path; // specific info file path
-		for (int i=0; i<infofiles.size(); i++)   {
-		    if (path.equals(infofiles.get(i)))	{ // File still present
-			infofiles.remove(i); // don't check it again
-			FileTime modified=Files.getLastModifiedTime(path);
-			if (entry.modified.equals(modified)) {
-			    // Add existing entry
-			    newList.add(entry);
-			} else {
-			    // Get subjectdn array and create new updated entry
-			    String[] subjectdns;
-			    try {
-				subjectdns=parseInfoFile(path);
-			    } catch (ParseException e)	{
-				log.error("Skipping: "+entry.name+
-					  " has syntax errors: "+
-					  e.getMessage());
-				subjectdns=new String[0];
-			    }
-			    // Add to the new list
-			    newList.add(new Entry(path, entry.name,
-						  modified, subjectdns));
-			    log.debug("Updated info file: "+entry.name);
-			    nupdated++;
-			}
-			break; // Continue with next entry in oldlist
-		    }
-		}
-	    }
-	}
-	// Store new size of infofiles and of newList
-	int nfiles_after=infofiles.size(), nentries_after=newList.size();
-
-	// Now handle new info files
-	for (int i=0; i<nfiles_after; i++)	{
-	    Path path=infofiles.get(i);
-	    String[] subjectdns;
-	    try {
-		subjectdns=parseInfoFile(path);
-	    } catch (ParseException e)	{
-		log.error("Skipping due to syntax errors: "+e.getMessage());
-		subjectdns=new String[0];
-	    }
-
-	    // Add to the new list
-	    newList.add(new Entry(path, subjectdns));
-	}
-
-	// Replace cachelist with newlist
-	cacheList=newList;
-
-	// update last updated timestamp
-	lastUpdated=Calendar.getInstance().getTimeInMillis();
-   
-	// Log statistics
-	log.debug("Updated list ("+trust_dir+"): "+(System.nanoTime()-t0)/1000000.0+" msec ("+
-	    (nentries_after-nupdated)+" copied, "+
-	    nupdated+" updated, "+
-	    (nentries_before-nentries_after)+" removed, "+
-	    nfiles_after+" new)");
-    }
-
-    /**
-     * Find all {@value #FILE_SFX} files (not symlinks) in given trust dir.
-     * @param trust_dir directory containing {@value #FILE_SFX} files
-     * @return ArrayList of Path
-     * @throws IOException upon directory reading errors
-     */
-    private static ArrayList<Path> getInfoFiles(String trust_dir)
-	throws IOException
-    {
-	// Filter for filtering out .info file that aren't symlinks.
-	DirectoryStream.Filter<Path> filter=new DirectoryStream.Filter<Path>() {
-	    public boolean accept(Path path)   {
-		return (path.toString().endsWith(FILE_SFX) &&
-		        Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS));
-	    }
-	};
-
-	// Protect against null trust_dir
-	if (trust_dir==null)
-	    throw new IOException("Trust dir is null");
-
-	// Get all files as a stream
-	DirectoryStream<Path> stream=null;
-	try {
-	    stream = Files.newDirectoryStream(Paths.get(trust_dir), filter);
-	} catch(IOException e)	{
-	    throw new IOException("Trust dir has problems: "+e.getMessage());
-	}
-
-	// Initialize file array
-	ArrayList<Path> files = new ArrayList<Path>();
-	// Add all entries
-	for (Path entry: stream)
-	    files.add(entry);
-
-	return files;
-    }
-
-
-    /**
-     * Parse an {@value #FILE_SFX} file and obtain a String array of subjectDN
-     * entries.
-     * @param path path of the info file
-     * @return array of subject DN strings
-     * @throws IOException in case of I/O errors
-     * @throws ParseException in case of subjectdn parsing errors
-     */
-    private static String[] parseInfoFile(Path path)
-	throws ParseException, IOException
-    {
-	String name=path.toString();
-	BufferedReader reader=null;
-	StringBuilder linebuilder=new StringBuilder();
-	String newline;
-	String value=null;
-
-	try {
-	    reader=Files.newBufferedReader(path, Charset.defaultCharset());
-	} catch (IOException e)	{
-	    throw new IOException("Cannot open "+name+": "+e.getMessage());
+	// Check whether cached list needs updating
+	if (cache.getLifeTime() > update_interval)	{
+	    // Make a new cache, using the old as input
+	    Cache newCache = new Cache(cache);
+	    // Replace the old cache
+	    cache=newCache;
 	}
 	
-	// initialize line
-	try {
-	    while ( (newline=reader.readLine()) != null )   {
-		// Append to existing or empty line
-		linebuilder.append(newline);
-
-		// Handle continuation char
-		int end=linebuilder.length()-1;
-		if (end>=0 && linebuilder.charAt(end)=='\\')	{
-		    linebuilder.deleteCharAt(end);
-		    continue;
-		}
-
-		// Remove leading whitespace (easiest when converting to String)
-		String line=linebuilder.toString().trim();
-		// Only look at non-empty non-comment lines
-		if (!line.isEmpty() && line.charAt(0)!='#')	{
-		    // Split into key / value and look for subjectdn
-		    int sep=line.indexOf('=');
-		    if (sep>=0 && SUBJECT_KEY.equals(line.substring(0,sep).trim())) {
-			value=line.substring(sep+1).trim();
-			break;
-		    }
-		}
-
-		// Continue with next line
-		linebuilder.setLength(0);
-	    }
-	} catch (IOException e)	{
-	    // Try to close, this might throw a new IOException. We're throwing
-	    // one in any case.
-	    reader.close();
-	    throw new IOException("Reading from "+name+" failed: "+e.getMessage());
-	}
-
-	// Close reader
-	try {
-	    reader.close();
-	} catch (IOException e)	{
-	    throw new IOException("Closing "+name+" failed: "+e.getMessage());
-	}
-
-	// Did we find the KEY?
-	if (value==null || value.isEmpty())
-	    throw new ParseException(name+": No "+SUBJECT_KEY+" key found", 0);
-
-	// Now parse the value part
-	ArrayList<String> list=new ArrayList<String>();
-	int pos=0;
-	while (true)	{
-	    // Check value start with quote
-	    if (value.charAt(pos)!='"')
-		throw new ParseException(name+": "+SUBJECT_KEY+" value invalid: "+value, pos);
-	    // Look for end quote (pos==quote_1)
-	    int quote=value.indexOf('"', pos+1);
-	    if ( quote < 0 )
-		throw new ParseException(name+": Missing end-quote", pos+1);
-	    // Add url-decoded value to the list
-	    list.add(URLDecoder.decode(value.substring(pos+1,quote),"UTF-8"));
-	    // Skip all trailing white-space and commas
-	    boolean foundComma=false;
-	    for (pos=quote+1; pos<value.length(); pos++)    {
-		// Keep track of whether we found a comma: need at least one
-		if (value.charAt(pos)==',') {
-		    foundComma=true; continue;
-		}
-		if (value.charAt(pos)!=' ' && value.charAt(pos)!='\t')
-		    break;
-	    }
-	    // Did we hit the end-of-line or find a comment char?
-	    if (pos==value.length() || value.charAt(pos)=='#') // we're done
-		break;
-	    // Check we found at least one comma
-	    if (!foundComma)
-		throw new ParseException(name+": Missing comma delimiter before new entry", pos);
-	}
-
-	// Convert to array and return
-	return list.toArray(new String[0]);
+	// Unset lock
+	updating=false;
     }
 }
