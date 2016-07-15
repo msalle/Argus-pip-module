@@ -237,13 +237,9 @@ public class Cache {
 		}
 	    }
 	    // Store counters
-	    // what's left of the cache
 	    nremoved = oldInfoEntries.size();
-	    // what's found in the cache
 	    ncopiedupdated = oldCache.infoEntries.size()-nremoved;
-	    // new list minus what was found in the cache
 	    nnew = infoEntries.size() - ncopiedupdated;
-	    // what was parsed minus what was new
 	    nupdated = newentries - nnew;
 	    ncopied = ncopiedupdated - nupdated;
 	} else {
@@ -284,16 +280,11 @@ public class Cache {
 	
 	// Store externals counters
 	if (oldExtInfoEntries==null)    {
-	    // anything parsed is new
 	    nenew = extInfoEntries.size();
 	} else {
-	    // what's left of the cache
 	    neremoved = oldExtInfoEntries.size();
-	    // what's found in the cache
 	    necopiedupdated = oldCache.extInfoEntries.size()-neremoved;
-	    // new list minus what was found in the cache
 	    nenew = extInfoEntries.size() - necopiedupdated;
-	    // what was parsed minus what was new
 	    neupdated = (newentries-nonext_newentries)-nenew;
 	    necopied = necopiedupdated - neupdated;
 	}
@@ -380,7 +371,6 @@ public class Cache {
 	if (recursion > MAX_RECURSION)
 	    throw new ParseException(path.getFileName()+
 		": Too many levels of recursion (max. "+MAX_RECURSION+")", 0);
-
 	// First check the new entries
 	if (getEntry(path, extInfoEntries)!=null) // already there
 	    return;
@@ -643,8 +633,6 @@ public class Cache {
 	ArrayList<Path> extdeps;
 	/** list of subject DNs defined directly in this file */
 	ArrayList<String> localSubDNs;
-	/** true when this file is in the trust_dir, default true */
-	boolean internal;
 	/** complete array of subject DNs for this info file */
 	String[] subDNs;
 
@@ -659,12 +647,13 @@ public class Cache {
 		this.modified=FileTime.fromMillis(0);
 	    }
 	    String name=path.getFileName().toString();
-	    this.name=name.substring(0, name.length()-FILE_SFX.length());
+	    this.name = (name.endsWith(FILE_SFX)
+		? name.substring(0, name.length()-FILE_SFX.length())
+		: name);
 	    this.path=path;
 	    this.deps=new ArrayList<Path>();
 	    this.extdeps=new ArrayList<Path>();
 	    this.localSubDNs=new ArrayList<String>();
-	    this.internal=true; // default
 	}
 
 	/**
@@ -694,7 +683,10 @@ public class Cache {
 
 	    // Add path to right dependency list
 	    ArrayList<Path> deplist;
-	    if (trust_dir.equals(deppath.getParent().toString()))
+	    // If real path is in trust_dir *and* ends with the FILE_SFX,
+	    // otherwise we consider it external
+	    if (trust_dir.equals(deppath.getParent().toString()) &&
+		deppath.getFileName().toString().endsWith(FILE_SFX))
 		deplist=deps;
 	    else
 		deplist=extdeps;
@@ -711,28 +703,27 @@ public class Cache {
 	 */
 	private ArrayList<String> getSubDNs()	{
 	    // Create temporary list
-	    ArrayList<String> subDNs=new ArrayList<String>();
+	    ArrayList<String> subDNsArr=new ArrayList<String>();
 
 	    // Add all the local ones
-	    subDNs.addAll(localSubDNs);
+	    subDNsArr.addAll(localSubDNs);
 
 	    // Add all DNs from the deps list
 	    for (int i=0; i<deps.size(); i++)	{
 		Entry entry=getEntry(deps.get(i), infoEntries);
 		if (entry!=null)
-		    subDNs.addAll(entry.getSubDNs());
+		    subDNsArr.addAll(entry.getSubDNs());
 	    }
 
 	    // Add all DNs from the extdeps list
 	    for (int i=0; i<extdeps.size(); i++)    {
 		Entry entry=getEntry(extdeps.get(i), extInfoEntries);
 		if (entry!=null)
-		    subDNs.addAll(entry.getSubDNs());
-
+		    subDNsArr.addAll(entry.getSubDNs());
 	    }
 
 	    // Return resulting set as array of String
-	    return subDNs;
+	    return subDNsArr;
 	}
 
 	/**
