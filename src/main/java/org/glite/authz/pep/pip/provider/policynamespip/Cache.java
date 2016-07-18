@@ -63,7 +63,7 @@ public class Cache {
     public final static String SUBJECT_KEY = "subjectdn";
 
     /** Maximum level of info file recursion ({@value}) */
-    public final static int MAX_RECURSION = 7;
+    public final static int MAX_RECURSION = 10;
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -94,8 +94,12 @@ public class Cache {
      */
     private long initTime = 0;
 
-    /** Number of new, failed and copied entries in the current update */
-    private int newentries, failedentries, copiedentries;
+    /** Number of new entries in the current update */
+    private int nentries_new;
+    /** Number of failed entries in the current update */
+    private int nentries_failed;
+    /** Number of copied entries in the current update */
+    private int nentries_copied;
 
     
     ////////////////////////////////////////////////////////////////////////
@@ -137,7 +141,7 @@ public class Cache {
     }
 
     /**
-     * Returns the lifetime of this Cache
+     * Returns the lifetime of this Cache in milliseconds.
      * @return msecs since initialization of this Cache
      */
     public long getLifeTime()  {
@@ -150,7 +154,8 @@ public class Cache {
     ////////////////////////////////////////////////////////////////////////
 
     /**
-     * Tries to find given issuer DN in the info files in {@link #trust_dir}.
+     * Tries to find given issuer DN in the cached info files in 
+     * the {@link #trust_dir}.
      * @param issuerDN String issuer DN to look for
      * @return array of String with all the matching info files
      */
@@ -177,8 +182,8 @@ public class Cache {
     ////////////////////////////////////////////////////////////////////////
 
     /**
-     * Updates the current cache not using existing one
-     * @throws IOException on I/O errors
+     * Updates the current cache not using existing one.
+     * @throws IOException upon reading errors
      * @see #update(Cache)
      */
     protected void update() throws IOException    {
@@ -199,7 +204,7 @@ public class Cache {
 	initTime = Calendar.getInstance().getTimeInMillis();
 
 	// Reset indicator for any change
-	newentries=copiedentries=failedentries=0;
+	nentries_new=nentries_copied=nentries_failed=0;
 
 	// Force directories to be the same and update the old lists
 	if (oldCache!=null) {
@@ -210,11 +215,7 @@ public class Cache {
 
 	// Get current list of info files
 	ArrayList<Path> infofiles;
-	try {
-	    infofiles=getInfoFiles(trust_dir);
-	} catch (IOException e)	{
-	    throw new RuntimeException("getInfoFiles() failed: "+e.getMessage());
-	}
+	infofiles=getInfoFiles(trust_dir);
 
 	// Loop over infofiles
 	int ninfofiles=infofiles.size();
@@ -227,7 +228,7 @@ public class Cache {
 	}
 
 	// Reprocess overall subDNs list when something changed
-	if (newentries > 0) {
+	if (nentries_new > 0) {
 	    for (Entry entry: infoEntries.values())
 		entry.updateSubDNs();
 	    for (Entry entry: extInfoEntries.values())
@@ -239,7 +240,7 @@ public class Cache {
 	    (System.nanoTime()-t0)/1000000.0+" msec ("+
 	    ninfofiles+" info files, "+infoEntries.size()+" valid, "+
 	    extInfoEntries.size()+" external dep(s), "+
-	    copiedentries+" copied, "+failedentries+" failed, "+newentries+" new)");
+	    nentries_copied+" copied, "+nentries_failed+" failed, "+nentries_new+" new)");
     }
 
 
@@ -248,7 +249,7 @@ public class Cache {
     ////////////////////////////////////////////////////////////////////////
 
     /**
-     * Find all {@value #FILE_SFX} files (not symlinks) in given trust dir.
+     * Find all {@value #FILE_SFX} files in given trust dir.
      * @param trust_dir directory containing {@value #FILE_SFX} files
      * @return ArrayList of Path
      * @throws IOException upon directory reading errors
@@ -284,15 +285,17 @@ public class Cache {
     }
 
     /**
-     * Creates new or updates dependencies of existing entry. The entry is first
-     * looked up in the oldList and used when unchanged. Otherwise a new entry
-     * is parsed. Following that, the list of 'external' dependencies is
-     * handled, using this same method. 
+     * Creates a new entry or updates an existing one (by updating dependencies
+     * where needed). The entry is first searched for in the oldList and used
+     * when unchanged. Otherwise a new entry is parsed. Following that, the list
+     * of 'external' dependencies (i.e. those outside the {@link #trust_dir} or
+     * not ending with {@value #FILE_SFX}) is handled, by recursively calling
+     * ourselves.
      * @param path path of entry to handle
-     * @param oldList either oldInfoEntries or oldExtInfoEntries depending on
-     * the type of entry
-     * @param newList either infoEntries or extInfoEntries depending on the type
-     * of entry
+     * @param oldList either {@link #oldInfoEntries} or
+     * {@link #oldExtInfoEntries} depending on the type of entry
+     * @param newList either {@link #infoEntries} or {@link #extInfoEntries}
+     * depending on the type of entry
      * @param recursion level of recursion (max. {@value #MAX_RECURSION})
      * @throws IOException when failing to read a info file
      * @throws ParseException on too many levels of recursion
@@ -309,19 +312,21 @@ public class Cache {
 
 	// Try to get an old entry
 	Entry entry=(oldList==null ? null : oldList.get(path));
+
 	// If it doesn't exist or has changed reparse it
-	if (entry==null || !entry.modified.equals(Files.getLastModifiedTime(path))) {
-	    // Create new entry
+	FileTime modified=Files.getLastModifiedTime(path);
+	if (entry==null || !entry.modified.equals(modified)) {
+	    // Create new entry, pass in pre-obtained modified
 	    try {
-		entry=parseInfoFile(path);
-		newentries++;
+		entry=parseInfoFile(path, modified);
+		nentries_new++;
 	    } catch (ParseException e)	{
 		log.warn("Syntax error, skipping "+path.getFileName().toString());
-		failedentries++;
+		nentries_failed++;
 		return;
 	    }
 	} else {
-	    copiedentries++;
+	    nentries_copied++;
 	}
 
 	// recursively verify or create its extdeps
@@ -336,13 +341,16 @@ public class Cache {
 
     /**
      * Parse an {@value #FILE_SFX} file and obtain an internal {@link Entry}
-     * containing all the Issuer DN and dependency information.
+     * containing all the subject DNs and dependency information.
      * @param path path of the info file
+     * @param modified modification time of file
      * @return {@link Entry} describing this file
      * @throws IOException in case of I/O errors
      * @throws ParseException in case of subjectdn parsing errors
      */
-    private Entry parseInfoFile(Path path) throws ParseException, IOException {
+    private Entry parseInfoFile(Path path, FileTime modified)
+	throws ParseException, IOException
+    {
 	// First get the value of the subjectdn key, this can throw IOException
 	String value = getSubjectDNvalue(path);
 
@@ -351,7 +359,7 @@ public class Cache {
 	    throw new ParseException(path.getFileName()+": No or empty "+SUBJECT_KEY+" key found", 0);
 
 	// Create new Entry for this path, already setting the name and the like
-	Entry entry=new Entry(path);
+	Entry entry=new Entry(path, modified);
 
 	// Parse out the value of the key into the entry, this can throw
 	// IOException or ParseException
@@ -428,9 +436,10 @@ public class Cache {
     }
 
     /**
-     * Parses out the different components of a subjectdn value and puts the
-     * results into the given entry. When a file: entry is found, it will
-     * add the correct path to the right list of dependencies.
+     * Parses out the different components of a subjectdn value as obtained by
+     * {@link #getSubjectDNvalue(Path)} and puts the results into the given entry.
+     * When a "file:" entry is found, it will add the correct path to the right
+     * list of dependencies.
      * @param entry {@link Entry} to fill
      * @param value value of the subjectdn key
      * @throws ParseException on syntax errors in the value
@@ -492,7 +501,7 @@ public class Cache {
     // Private class
     ////////////////////////////////////////////////////////////////////////
 
-    /** Internal type of info file entries */
+    /** Internal representation of info file entries */
     private class Entry	{
 	/** full path of this info file */
 	Path path;
@@ -504,26 +513,23 @@ public class Cache {
 	HashSet<Path> deps;
 	/** dependencies outside of the trust_dir */
 	HashSet<Path> extdeps;
-	/** list of subject DNs defined directly in this file */
+	/** set of subject DNs defined directly in this file */
 	HashSet<String> localSubDNs;
-	/** complete array of subject DNs for this info file */
+	/** complete set of subject DNs for this info file */
 	HashSet<String> subDNs;
 
 	/**
-	 * Constructor, setting name and modified from path.
+	 * Constructor, setting name from path.
 	 * @param path path of the info file
+	 * @param modified modification time of file
 	 */
-	private Entry(Path path) {
-	    try {
-		this.modified=Files.getLastModifiedTime(path);
-	    } catch (IOException e) { // Cannot initialize: use 1/1/1970
-		this.modified=FileTime.fromMillis(0);
-	    }
+	private Entry(Path path, FileTime modified) {
 	    String name=path.getFileName().toString();
 	    this.name = (name.endsWith(FILE_SFX)
 		? name.substring(0, name.length()-FILE_SFX.length())
 		: name);
 	    this.path=path;
+	    this.modified=modified;
 	    this.deps=new HashSet<Path>();
 	    this.extdeps=new HashSet<Path>();
 	    this.localSubDNs=new HashSet<String>();
@@ -531,13 +537,11 @@ public class Cache {
 
 	/**
 	 * Resolves what type of dependency we have and add to the correct
-	 * dependency list
+	 * dependency list. A path outside the trust_dir or a path not ending
+	 * with {@link #FILE_SFX} is external.
 	 * @param dependency Path of the dependency to find
-	 * @throws IOException on filesystem errors
 	 */
-	private void addDependency(String dependency)
-	    throws IOException
-	{
+	private void addDependency(String dependency) {
 	    // First get correct Path for the filename
 	    Path deppath;
 	    if (dependency.charAt(0) == '/')
@@ -567,7 +571,7 @@ public class Cache {
 	/**
 	 * Recursively retrieves all subject DNs for this entry, either defined
 	 * locally or indirectly via dependencies.
-	 * @param recursion level of recursion (max. {@value #MAX_RECURSION})
+	 * @param recursion level of recursion (max. {@link #MAX_RECURSION})
 	 * @return HashSet of String containing all the subject DNs
 	 * @throws ParseException on too many levels of recursion
 	 */
@@ -604,7 +608,8 @@ public class Cache {
 	}
 
 	/**
-	 * Updates the String array of all subject DNs valid for this info file
+	 * Recursively updates the internal set of all subject DNs valid for
+	 * this entry.
 	 */
 	private void updateSubDNs() {
 	    try {
