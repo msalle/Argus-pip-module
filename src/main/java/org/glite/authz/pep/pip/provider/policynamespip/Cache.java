@@ -25,11 +25,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.nio.file.Path;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Paths;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.attribute.FileTime;
 import java.nio.charset.Charset;
 import java.io.BufferedReader;
@@ -70,10 +71,16 @@ public class Cache {
     ////////////////////////////////////////////////////////////////////////
 
     /** Cached list of {@value #FILE_SFX} file entries in the trust_dir */
-    private ArrayList<Entry> infoEntries = new ArrayList<Entry>();
+    private LinkedHashMap<Path,Entry> infoEntries = new LinkedHashMap<Path,Entry>();
     
     /** Cached list of {@value #FILE_SFX} file entries outside of the trust_dir */
-    private ArrayList<Entry> extInfoEntries = new ArrayList<Entry>();
+    private LinkedHashMap<Path,Entry> extInfoEntries = new LinkedHashMap<Path,Entry>();
+   
+    /** Previous cached list of {@value #FILE_SFX} file entries in the trust_dir */
+    private LinkedHashMap<Path,Entry> oldInfoEntries = null;
+    
+    /** Previous cached list of {@value #FILE_SFX} file entries outside of the trust_dir */
+    private LinkedHashMap<Path,Entry> oldExtInfoEntries = null;
     
     /**
      * Directory containing the {@value #FILE_SFX} files
@@ -87,8 +94,8 @@ public class Cache {
      */
     private long initTime = 0;
 
-    /** Number of parsed entries in update */
-    private int newentries;
+    /** Number of new, failed and copied entries in the current update */
+    private int newentries, failedentries, copiedentries;
 
     
     ////////////////////////////////////////////////////////////////////////
@@ -156,16 +163,10 @@ public class Cache {
 	ArrayList<String> policynames = new ArrayList<String>();
 
 	// Loop over the cached list and look for match
-	for (int i=0; i<infoEntries.size(); i++)    {
-	    Entry entry=infoEntries.get(i);
-	    String[] subDNs=entry.subDNs;
-	    for (int j=0; j<subDNs.length; j++)	{
-		if (issuerDN.equals(subDNs[j]))  {
-		    policynames.add(entry.name);
-		    break; // subject dn loop
-		}
-	    }
-	}
+	for (Entry entry: infoEntries.values())
+	    if (entry.subDNs.contains(issuerDN))
+		policynames.add(entry.name);
+
 	// Convert ArrayList to an array and return
 	return policynames.toArray(new String[0]);
     }
@@ -193,123 +194,52 @@ public class Cache {
      */
     protected void update(Cache oldCache) throws IOException    {
 	long t0=System.nanoTime();
-	int nremoved=0, ncopiedupdated=0, nnew=0, nupdated=0, ncopied=0,
-	    neremoved=0, necopiedupdated=0, nenew=0, neupdated=0, necopied=0;
 
 	// Set initialization time
 	initTime = Calendar.getInstance().getTimeInMillis();
 
 	// Reset indicator for any change
-	newentries=0;
+	newentries=copiedentries=failedentries=0;
 
-	// Force directories to be the same
-	if (oldCache!=null)
+	// Force directories to be the same and update the old lists
+	if (oldCache!=null) {
 	    trust_dir=oldCache.getTrustDir();
+	    oldInfoEntries=oldCache.infoEntries;
+	    oldExtInfoEntries=oldCache.extInfoEntries;
+	}
 
 	// Get current list of info files
-	ArrayList<Path> infofiles, extinfofiles=new ArrayList<Path>();
+	ArrayList<Path> infofiles;
 	try {
 	    infofiles=getInfoFiles(trust_dir);
 	} catch (IOException e)	{
-	    throw new IOException("getInfoFiles() failed: "+e.getMessage());
+	    throw new RuntimeException("getInfoFiles() failed: "+e.getMessage());
 	}
 
-	// Get cached list of entries
-	if (oldCache!=null && oldCache.infoEntries!=null)   {
-	    // Make a shallow copy of the two old lists: we want to change those
-	    // lists, but not the entries themselves. Don't use clone() which is
-	    // tricky to cast correctly (impossible without warnings).
-	    ArrayList<Entry> oldInfoEntries = new ArrayList<Entry>(oldCache.infoEntries);
-
-	    // Loop over new list of infofiles
-	    for (int i=0; i<infofiles.size(); i++)  {
-		// Get entry from the old entries or (re)parse it
-		try {
-		    Entry entry=getOrParseInfoFile(infofiles.get(i), oldInfoEntries);
-
-		    // Add to new list
-		    infoEntries.add(entry);
-
-		    // Add all the external dependencies to the list
-		    addExtDeps(entry, extinfofiles);
-		} catch (ParseException e)  {
-		    log.error("Syntax error, skipping "+infofiles.get(i));
-		}
-	    }
-	    // Store counters
-	    nremoved = oldInfoEntries.size();
-	    ncopiedupdated = oldCache.infoEntries.size()-nremoved;
-	    nnew = infoEntries.size() - ncopiedupdated;
-	    nupdated = newentries - nnew;
-	    ncopied = ncopiedupdated - nupdated;
-	} else {
-	    // Loop over new list of infofiles
-	    for (int i=0; i<infofiles.size(); i++)  {
-		// Get entry from the old entries or (re)parse it
-		try {
-		    Entry entry=parseInfoFile(infofiles.get(i));
-
-		    // Add to new list
-		    infoEntries.add(entry);
-
-		    // Add all the external dependencies to the list
-		    addExtDeps(entry, extinfofiles);
-		} catch (ParseException e)  {
-		    log.error("Syntax error, skipping "+infofiles.get(i));
-		} 
-	    }
-	    // Store counters: anything parsed is new
-	    nnew = infoEntries.size();
-	}
-
-	// Now handle the extinfofiles
-	ArrayList<Entry> oldExtInfoEntries=null;
-	if (oldCache!=null && oldCache.extInfoEntries!=null)
-	    oldExtInfoEntries = new ArrayList<Entry>(oldCache.extInfoEntries);
-	// Save number of copied & updated 'normal' info files
-	int nonext_newentries=newentries;
-	// Now loop over the list of externals
-	for (int i=0; i<extinfofiles.size(); i++)   {
+	// Loop over infofiles
+	int ninfofiles=infofiles.size();
+	for (int i=0; i<ninfofiles; i++)    {
 	    try {
-		recurseParseExtInfoFile(extinfofiles.get(i),oldExtInfoEntries,0);
+		handleEntry(infofiles.get(i), oldInfoEntries, infoEntries, 0);
 	    } catch (ParseException e)	{
-		log.error("Parsing "+extinfofiles.get(i).getFileName()+
-			  " failed: "+e.getMessage());
+		log.warn("Syntax error, skipping "+infofiles.get(i));
 	    }
 	}
-	
-	// Store externals counters
-	if (oldExtInfoEntries==null)    {
-	    nenew = extInfoEntries.size();
-	} else {
-	    neremoved = oldExtInfoEntries.size();
-	    necopiedupdated = oldCache.extInfoEntries.size()-neremoved;
-	    nenew = extInfoEntries.size() - necopiedupdated;
-	    neupdated = (newentries-nonext_newentries)-nenew;
-	    necopied = necopiedupdated - neupdated;
-	}
-
-	// Create the cumulative subject DN lists
-	for (int i=0; i<infoEntries.size(); i++)
-	    infoEntries.get(i).updateSubDNs();
-	for (int i=0; i<extInfoEntries.size(); i++)
-	    extInfoEntries.get(i).updateSubDNs();
 
 	// Reprocess overall subDNs list when something changed
 	if (newentries > 0) {
-	    for (int i=0; i<infoEntries.size(); i++)
-		infoEntries.get(i).updateSubDNs();
-	    for (int i=0; i<extInfoEntries.size(); i++)
-		extInfoEntries.get(i).updateSubDNs();
+	    for (Entry entry: infoEntries.values())
+		entry.updateSubDNs();
+	    for (Entry entry: extInfoEntries.values())
+		entry.updateSubDNs();
 	}
-
+	
 	// Log statistics
 	log.debug("Updated list ("+trust_dir+"): "+
 	    (System.nanoTime()-t0)/1000000.0+" msec ("+
-	    ncopied+" copied, "+nupdated+" updated, "+
-	    nremoved+" removed, "+nnew+" new, externals: "+
-	    necopied+" copied, "+neupdated+" updated, "+
-	    neremoved+" removed, "+nenew+" new)");
+	    ninfofiles+" info files, "+infoEntries.size()+" valid, "+
+	    extInfoEntries.size()+" external dep(s), "+
+	    copiedentries+" copied, "+failedentries+" failed, "+newentries+" new)");
     }
 
 
@@ -324,11 +254,11 @@ public class Cache {
      * @throws IOException upon directory reading errors
      */
     private ArrayList<Path> getInfoFiles(String trust_dir) throws IOException {
-	// Filter for filtering out .info file that aren't symlinks.
+	// Filter for filtering out .info file. Seems faster than using a glob
+	// in newDirectoryStream()
 	DirectoryStream.Filter<Path> filter=new DirectoryStream.Filter<Path>() {
 	    public boolean accept(Path path)   {
-		return (path.toString().endsWith(FILE_SFX) &&
-			Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS));
+		return (path.toString().endsWith(FILE_SFX));
 	    }
 	};
 
@@ -354,80 +284,55 @@ public class Cache {
     }
 
     /**
-     * Recursively parses the external infofile given by path, using a existing
-     * list of external info file oldExtInfoEntries.
-     * @param path infofile to handle
-     * @param oldExtInfoEntries list of old (and possibly changed) external info
-     * files
-     * @param recursion current level of recursion
-     * @throws IOException when reading file failed
-     * @throws ParseException when the level of recursions is too large
+     * Creates new or updates dependencies of existing entry. The entry is first
+     * looked up in the oldList and used when unchanged. Otherwise a new entry
+     * is parsed. Following that, the list of 'external' dependencies is
+     * handled, using this same method. 
+     * @param path path of entry to handle
+     * @param oldList either oldInfoEntries or oldExtInfoEntries depending on
+     * the type of entry
+     * @param newList either infoEntries or extInfoEntries depending on the type
+     * of entry
+     * @param recursion level of recursion (max. {@value #MAX_RECURSION})
+     * @throws IOException when failing to read a info file
+     * @throws ParseException on too many levels of recursion
      */
-    private void recurseParseExtInfoFile(Path path,
-					 ArrayList<Entry> oldExtInfoEntries,
-					 int recursion)
-	throws ParseException, IOException
+    private void handleEntry(Path path,
+			     LinkedHashMap<Path,Entry> oldList,
+			     LinkedHashMap<Path,Entry> newList,
+			     int recursion)
+	throws IOException, ParseException
     {
+	// Protect against recursion
 	if (recursion > MAX_RECURSION)
-	    throw new ParseException(path.getFileName()+
-		": Too many levels of recursion (max. "+MAX_RECURSION+")", 0);
-	// First check the new entries
-	if (getEntry(path, extInfoEntries)!=null) // already there
-	    return;
+	    throw new ParseException("Too many levels of recursion (max. "+MAX_RECURSION+") in "+path, recursion);
 
-	// Get it from the old entries or (re)parse it
-	Entry entry;
-	try {
-	    if (oldExtInfoEntries != null)
-		entry=getOrParseInfoFile(path, oldExtInfoEntries);
-	    else
+	// Try to get an old entry
+	Entry entry=(oldList==null ? null : oldList.get(path));
+	// If it doesn't exist or has changed reparse it
+	if (entry==null || !entry.modified.equals(Files.getLastModifiedTime(path))) {
+	    // Create new entry
+	    try {
 		entry=parseInfoFile(path);
-	} catch (ParseException e)  {
-	    throw new ParseException("Syntax error in external dependency "+
-		path.getFileName(), e.getErrorOffset());
-	}
-
-	// Add it to the new list (it's not there yet)
-	// entry is not yet in new list (we checked above), add it now
-	extInfoEntries.add(entry);
-
-	// Now handle the dependencies
-	for (int i=0; i<entry.extdeps.size(); i++)
-	    recurseParseExtInfoFile(entry.extdeps.get(i), oldExtInfoEntries, recursion+1);
-    }
-
-    /**
-     * Looks for entry matching path in list of old entries or return a new one.
-     * If found in the old list remove it from there, if it's also not modified,
-     * use it, otherwise parse it.
-     * @param path infofile
-     * @param oldEntries list of existing entries.
-     * @return old or new entry
-     * @throws IOException in case of I/O errors
-     * @throws ParseException in case of subjectdn parsing errors
-     */
-    private Entry getOrParseInfoFile(Path path, ArrayList<Entry> oldEntries)
-	throws ParseException, IOException
-    {
-	Entry entry;
-	boolean found=false;
-
-	// Loop over old entries to see if it's there
-	for (int i=0; i<oldEntries.size(); i++)    {
-	    entry=oldEntries.get(i);
-	    if (path.equals(entry.path))	{
-		// Remove from old list: no need to recheck since we
-		// either update or copy entry corresponding to this
-		// path
-		oldEntries.remove(i);
-		// Found match, now check the filestamp
-		if (entry.modified.equals(Files.getLastModifiedTime(path)))
-		    return entry;
+		newentries++;
+	    } catch (ParseException e)	{
+		log.warn("Syntax error, skipping "+path.getFileName().toString());
+		failedentries++;
+		return;
 	    }
+	} else {
+	    copiedentries++;
 	}
-	// No (unchanged) match: create new entry
-	return parseInfoFile(path);
+
+	// recursively verify or create its extdeps
+	for (Path extpath: entry.extdeps)
+	    if (!extInfoEntries.containsKey(extpath))
+		handleEntry(extpath, oldExtInfoEntries, extInfoEntries, recursion+1);
+
+	// Put it in the new list
+	newList.put(path,entry);
     }
+
 
     /**
      * Parse an {@value #FILE_SFX} file and obtain an internal {@link Entry}
@@ -451,9 +356,6 @@ public class Cache {
 	// Parse out the value of the key into the entry, this can throw
 	// IOException or ParseException
 	parseSubjectDNvalue(entry, value);
-
-	// Update global new/changed flag
-	newentries++;
 
 	// Now return the entry
 	return entry;
@@ -585,35 +487,6 @@ public class Cache {
 	}
     }
 
-    /**
-     * Adds all the external dependencies from entry and add them to the given
-     * infofilelist when not yet there.
-     * @param entry input entry
-     * @param extinfofiles ArrayList of Path to add the external dependencies to
-     */
-    private void addExtDeps(Entry entry, ArrayList<Path> extinfofiles)    {
-	ArrayList<Path> extdeps=entry.extdeps;
-	for (int i=0; i<extdeps.size(); i++)    {
-	    Path extdep=extdeps.get(i);
-	    if (!extinfofiles.contains(extdep))
-		extinfofiles.add(extdep);
-	}
-    }
-
-    /**
-     * Search for entry in entries matching path
-     * @param path Path to search for (needle)
-     * @param entries list of Entry to search through (haystack)
-     * @return Entry matching path or null when no match is found
-     */
-    private Entry getEntry(Path path, ArrayList<Entry> entries)	{
-	for (int i=0; i<entries.size(); i++)    {
-	    Entry entry = entries.get(i);
-	    if (path.equals(entry.path))
-		return entry;
-	}
-	return null;
-    }
 
     ////////////////////////////////////////////////////////////////////////
     // Private class
@@ -628,13 +501,13 @@ public class Cache {
 	/** last modification time of this info file */
 	FileTime modified;
 	/** dependencies in the trust_dir */
-	ArrayList<Path> deps;
+	HashSet<Path> deps;
 	/** dependencies outside of the trust_dir */
-	ArrayList<Path> extdeps;
+	HashSet<Path> extdeps;
 	/** list of subject DNs defined directly in this file */
-	ArrayList<String> localSubDNs;
+	HashSet<String> localSubDNs;
 	/** complete array of subject DNs for this info file */
-	String[] subDNs;
+	HashSet<String> subDNs;
 
 	/**
 	 * Constructor, setting name and modified from path.
@@ -651,9 +524,9 @@ public class Cache {
 		? name.substring(0, name.length()-FILE_SFX.length())
 		: name);
 	    this.path=path;
-	    this.deps=new ArrayList<Path>();
-	    this.extdeps=new ArrayList<Path>();
-	    this.localSubDNs=new ArrayList<String>();
+	    this.deps=new HashSet<Path>();
+	    this.extdeps=new HashSet<Path>();
+	    this.localSubDNs=new HashSet<String>();
 	}
 
 	/**
@@ -671,19 +544,15 @@ public class Cache {
 		// absolute path
 		deppath=Paths.get(dependency).normalize();
 	    else if (dependency.indexOf('/')==-1)
-		// no directory components, could still symlink to external
+		// no directory components, could be non-.info file
 		deppath=Paths.get(trust_dir, dependency);
 	    else
-		// relative path
+		// relative path incl. at least 1 directory
 		deppath=Paths.get(trust_dir, dependency).normalize();
 	    
-	    // Resolve symlinks when needed
-	    if (Files.isSymbolicLink(deppath))
-		deppath=deppath.toRealPath();
-
 	    // Add path to right dependency list
-	    ArrayList<Path> deplist;
-	    // If real path is in trust_dir *and* ends with the FILE_SFX,
+	    HashSet<Path> deplist;
+	    // If path is in trust_dir *and* ends with the FILE_SFX,
 	    // otherwise we consider it external
 	    if (trust_dir.equals(deppath.getParent().toString()) &&
 		deppath.getFileName().toString().endsWith(FILE_SFX))
@@ -692,45 +561,58 @@ public class Cache {
 		deplist=extdeps;
 
 	    // Add when not there yet
-	    if (!deplist.contains(deppath))
-		deplist.add(deppath);
+	    deplist.add(deppath);
 	}
 
 	/**
 	 * Recursively retrieves all subject DNs for this entry, either defined
 	 * locally or indirectly via dependencies.
-	 * @return Array of String containing all the subject DNs
+	 * @param recursion level of recursion (max. {@value #MAX_RECURSION})
+	 * @return HashSet of String containing all the subject DNs
+	 * @throws ParseException on too many levels of recursion
 	 */
-	private ArrayList<String> getSubDNs()	{
+	private HashSet<String> getSubDNs(int recursion) throws ParseException	{
+	    if (recursion>MAX_RECURSION)
+		throw new ParseException("Too many levels of recursion (max. "+MAX_RECURSION+") in "+name, recursion);
+
 	    // Create temporary list
-	    ArrayList<String> subDNsArr=new ArrayList<String>();
-
+	    HashSet<String> subDNsSet=new HashSet<String>();
+	    
 	    // Add all the local ones
-	    subDNsArr.addAll(localSubDNs);
+	    subDNsSet.addAll(localSubDNs);
 
-	    // Add all DNs from the deps list
-	    for (int i=0; i<deps.size(); i++)	{
-		Entry entry=getEntry(deps.get(i), infoEntries);
+	    // Recursively add all DNs from the deps list
+	    for (Path path: deps)   {
+		Entry entry=infoEntries.get(path);
 		if (entry!=null)
-		    subDNsArr.addAll(entry.getSubDNs());
+		    subDNsSet.addAll(entry.getSubDNs(recursion+1));
+		else
+		    log.warn("Cannot find dep "+path+" for "+name);
 	    }
-
-	    // Add all DNs from the extdeps list
-	    for (int i=0; i<extdeps.size(); i++)    {
-		Entry entry=getEntry(extdeps.get(i), extInfoEntries);
+		
+	    // Recursively add all DNs from the extdeps list
+	    for (Path path: extdeps)	{
+		Entry entry=extInfoEntries.get(path);
 		if (entry!=null)
-		    subDNsArr.addAll(entry.getSubDNs());
+		    subDNsSet.addAll(entry.getSubDNs(recursion+1));
+		else
+		    log.warn("Cannot find dep "+path+" for "+name);
 	    }
 
 	    // Return resulting set as array of String
-	    return subDNsArr;
+	    return subDNsSet;
 	}
 
 	/**
 	 * Updates the String array of all subject DNs valid for this info file
 	 */
-	private void updateSubDNs()	{
-	    this.subDNs=getSubDNs().toArray(new String[0]);
+	private void updateSubDNs() {
+	    try {
+		this.subDNs=getSubDNs(0);
+	    } catch (ParseException e)	{
+		log.error("Syntax error in "+name+": "+e.getMessage());
+		this.subDNs=new HashSet<String>();
+	    }
 	}
     
     }
