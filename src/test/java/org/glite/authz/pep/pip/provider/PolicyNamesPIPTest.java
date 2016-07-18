@@ -25,8 +25,6 @@ import org.glite.authz.common.model.Subject;
 import org.glite.authz.common.model.Attribute;
 import org.glite.authz.pep.pip.PIPProcessingException;
 
-import java.io.IOException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +44,7 @@ public class PolicyNamesPIPTest {
 
     private final static String GoodDN = "/C=NL/O=Example/OU=PDP/CN=Test CA";
     
-    private final static String BadDN = "/C=Blabla";
+    private final static String BadDN = "/C=John Doe";
 
     /**
      * Setup a new {@link PolicyNamesPIP_PIP} PIP and set the accepted attributes
@@ -63,14 +61,11 @@ public class PolicyNamesPIPTest {
     @After
     public void finalize() throws Exception {
 	log.debug("Stopping PIP");
-        pip.stop();
+	if (pip!=null)
+	    pip.stop();
+	else
+	    log.warn("PIP already stopped it seems...");
     }
-
-    /** Sets the 'default' trust_dir in the class */
-/*    protected void setDefaultTrustDir()	{
-	String dir=getClass().getResource("/certificates").getFile();
-	PolicyNamesPIP.setTrustDir(dir);
-    }*/
 
     /**
      * Helper method for handling tests that throw a PIPProcessingException
@@ -121,7 +116,7 @@ public class PolicyNamesPIPTest {
         Request request= new Request();
         return request;
     }
-    
+
 
     /** Test with empty directory */
     @Test
@@ -188,7 +183,7 @@ public class PolicyNamesPIPTest {
 	assertFalse("populateRequest should have failed", result);
     }
     
-    /** Test with valid issuer DN */
+    /** Test with a valid issuer DN */
     @Test
     public void testGood() throws Exception {
 	log.info("test request with valid subject");
