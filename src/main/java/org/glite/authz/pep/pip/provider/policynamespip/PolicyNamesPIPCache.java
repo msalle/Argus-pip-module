@@ -48,9 +48,9 @@ import java.text.ParseException;
  * trust directory.
  * @author Mischa Sall&eacute;
  */
-public class Cache {
+public class PolicyNamesPIPCache {
     /** Class logger instance */
-    private final Logger log = LoggerFactory.getLogger(Cache.class);
+    private final Logger log = LoggerFactory.getLogger(PolicyNamesPIPCache.class);
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -90,7 +90,7 @@ public class Cache {
     private String trust_dir = null;
 
     /**
-     * Time when Cache was initialized
+     * Time when PolicyNamesPIPCache was initialized
      * @see #getLifeTime
      */
     private long initTime = 0;
@@ -108,23 +108,23 @@ public class Cache {
     ////////////////////////////////////////////////////////////////////////
 
     /**
-     * constructs new Cache based on given trustDir
+     * constructs new PolicyNamesPIPCache based on given trustDir
      * @param trustDir directory containing info files
      * @throws IOException on read errors for trust_dir or one of the info files
-     * @see #Cache(Cache)
+     * @see #PolicyNamesPIPCache(PolicyNamesPIPCache)
      */
-    public Cache(String trustDir) throws IOException   {
+    public PolicyNamesPIPCache(String trustDir) throws IOException   {
 	this.trust_dir = trustDir;
 	this.update();
     }
 
     /**
-     * constructs new Cache based on old Cache
-     * @param oldCache previous Cache
+     * constructs new PolicyNamesPIPCache based on old PolicyNamesPIPCache
+     * @param oldCache previous PolicyNamesPIPCache
      * @throws IOException on read errors for trust_dir or one of the info files
-     * @see #Cache(String)
+     * @see #PolicyNamesPIPCache(String)
      */
-    public Cache(Cache oldCache) throws IOException    {
+    public PolicyNamesPIPCache(PolicyNamesPIPCache oldCache) throws IOException    {
 	this.update(oldCache);
     }
 
@@ -135,15 +135,15 @@ public class Cache {
  
     /**
      * Returns the internal trust_dir
-     * @return {@link #trust_dir} for this Cache
+     * @return {@link #trust_dir} for this PolicyNamesPIPCache
      */
     public String getTrustDir()  {
 	return trust_dir;
     }
 
     /**
-     * Returns the lifetime of this Cache in milliseconds.
-     * @return msecs since initialization of this Cache
+     * Returns the lifetime of this PolicyNamesPIPCache in milliseconds.
+     * @return msecs since initialization of this PolicyNamesPIPCache
      */
     public long getLifeTime()  {
 	return Calendar.getInstance().getTimeInMillis()-initTime;
@@ -185,7 +185,7 @@ public class Cache {
     /**
      * Updates the current cache not using existing one.
      * @throws IOException upon reading errors
-     * @see #update(Cache)
+     * @see #update(PolicyNamesPIPCache)
      */
     protected void update() throws IOException    {
 	this.update(null);
@@ -194,11 +194,11 @@ public class Cache {
     /**
      * Update internal, cached list of parsed-out info files in the specified
      * trustDir.
-     * @param oldCache previous Cache to be updated
+     * @param oldCache previous PolicyNamesPIPCache to be updated
      * @see #update()
      * @throws IOException upon reading errors
      */
-    protected void update(Cache oldCache) throws IOException    {
+    protected void update(PolicyNamesPIPCache oldCache) throws IOException    {
 	long t0=System.nanoTime();
 
 	// Set initialization time

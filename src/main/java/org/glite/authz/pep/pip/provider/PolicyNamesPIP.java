@@ -21,7 +21,7 @@
 
 package org.glite.authz.pep.pip.provider;
 
-import org.glite.authz.pep.pip.provider.policynamespip.Cache;
+import org.glite.authz.pep.pip.provider.policynamespip.PolicyNamesPIPCache;
 
 import org.glite.authz.common.model.Request;
 import org.glite.authz.common.model.Subject;
@@ -88,12 +88,12 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     // instance variables, internal use only
     ////////////////////////////////////////////////////////////////////////
     
-    /** Whether we're updating and replacing the {@link Cache} */
+    /** Whether we're updating and replacing the {@link PolicyNamesPIPCache} */
     private boolean updating=false;
 
     /** Cache of info file directory
-     * @see Cache */
-    private Cache cache = null;
+     * @see PolicyNamesPIPCache */
+    private PolicyNamesPIPCache cache = null;
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -125,13 +125,14 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
      * is no longer valid. Note that this is not thread-safe.
      * @param trustDir directory where info files are located.
      * @see #TRUST_DIR
-     * @throws IOException upon I/O errors in updating the {@link Cache}
+     * @throws IOException upon I/O errors in updating the
+     * {@link PolicyNamesPIPCache}
      */
     protected void setTrustDir(String trustDir) throws IOException    {
 	// If argument is different from current one, update
 	if (trust_dir==null || !trust_dir.equals(trustDir)) {
 	    trust_dir=trustDir;
-	    cache = new Cache(trust_dir);
+	    cache = new PolicyNamesPIPCache(trust_dir);
 	}
     }
 
@@ -147,14 +148,14 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
      * @see #PolicyNamesPIP(String)
      * @throws IOException in case of I/O errors
      */
-    public PolicyNamesPIP(String pipid, String trustDir) throws IOException	{
+    public PolicyNamesPIP(String pipid, String trustDir) throws IOException {
 	super(pipid);
 
 	// Set internal trust_dir
 	trust_dir=trustDir;
 
 	// Initialize cache
-	cache = new Cache(trustDir);
+	cache = new PolicyNamesPIPCache(trustDir);
     }
 
     /**
@@ -177,13 +178,15 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
      * {@inheritDoc}
      * This PIP adds a {@value #ATTR_CA_POLICY_NAMES} attribute to the
      * corresponding subjects. The value(s) of this attribute are the short
-     * names of all the {@value Cache#FILE_SFX} files that match the
-     * value of the {@value ATTR_X509_ISSUER} attribute.
+     * names of all the {@value PolicyNamesPIPCache#FILE_SFX} files that match
+     * the value of the {@value ATTR_X509_ISSUER} attribute.
      * @param request the incoming request.
      * @throws PIPProcessingException in case of errors.
      * @return boolean: true when attribute has been populated, false otherwise.
      */
-    public boolean populateRequest(Request request) throws PIPProcessingException {
+    public boolean populateRequest(Request request)
+	throws PIPProcessingException
+    {
 	long t0=System.nanoTime();
 	boolean pipprocessed=false;
 	String issuerdn=null;
@@ -196,7 +199,8 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	    throw new PIPProcessingException("No subject found in request");
 	}
 	if (subjects.size()>1)
-	    log.warn("Request has "+subjects.size()+" subjects, taking first match");
+	    log.warn("Request has "+subjects.size()+
+		     " subjects, taking first match");
 
 	// Loop over all subjects
 	for (Subject subject : subjects) {
@@ -224,7 +228,8 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 		policynames=findSubjectDN(issuerdn);
 	    } catch (IOException e)	{
 		log.error("I/O error reading info files: "+e.getMessage());
-		throw new PIPProcessingException("I/O error reading info files: "+e.getMessage());
+		throw new PIPProcessingException(
+		    "I/O error reading info files: "+e.getMessage());
 	    }
 
 	    // Log total number of matching policies
@@ -266,7 +271,8 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
      * Tries to find given subjectDN in the info files in {@link #trust_dir}.
      * @param dn String subject DN to look for
      * @return array of String with all the matching info files
-     * @throws IOException upon reading errors in updating the {@link Cache}
+     * @throws IOException upon reading errors in updating the
+     * {@link PolicyNamesPIPCache}
      */
     private String[] findSubjectDN(String dn) throws IOException   {
 	// Update the cache (when needed)
@@ -280,8 +286,9 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     }
     
     /**
-     * Update the internal {@link Cache} when needed
-     * @throws IOException upon I/O errors in updating the {@link Cache}
+     * Update the internal {@link PolicyNamesPIPCache} when needed
+     * @throws IOException upon I/O errors in updating the
+     * {@link PolicyNamesPIPCache}
      */
     private void updateCache() throws IOException    {
 	if (updating)
@@ -293,7 +300,7 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	// Check whether cached list needs updating
 	if (cache.getLifeTime() > update_interval)	{
 	    // Make a new cache, using the old as input
-	    Cache newCache = new Cache(cache);
+	    PolicyNamesPIPCache newCache = new PolicyNamesPIPCache(cache);
 	    // Replace the old cache
 	    cache=newCache;
 	}
