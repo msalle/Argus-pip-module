@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Paths;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.attribute.FileTime;
 import java.nio.charset.Charset;
 import java.io.BufferedReader;
@@ -313,8 +314,18 @@ public class Cache {
 	// Try to get an old entry
 	Entry entry=(oldList==null ? null : oldList.get(path));
 
-	// If it doesn't exist or has changed reparse it
-	FileTime modified=Files.getLastModifiedTime(path);
+	// Get the modification time of the path
+	FileTime modified;
+	if (Files.isSymbolicLink(path))	{
+	    // Symlink: get both link and dest times and use whichever is later
+	    FileTime mod_dest=Files.getLastModifiedTime(path);
+	    FileTime mod_link=Files.getLastModifiedTime(path, LinkOption.NOFOLLOW_LINKS);
+	    modified=(mod_dest.compareTo(mod_link)<0 ? mod_link : mod_dest);
+	} else {
+	    modified=Files.getLastModifiedTime(path);
+	}
+
+	// If the entry doesn't exist yet or has changed, reparse it.
 	if (entry==null || !entry.modified.equals(modified)) {
 	    // Create new entry, pass in pre-obtained modified
 	    try {
