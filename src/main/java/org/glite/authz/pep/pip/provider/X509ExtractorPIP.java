@@ -55,7 +55,12 @@ import java.io.IOException;
  * This PIP can extract several different attributes from a X.509v3 certificate,
  * as obtained from the {@link ATTR_KEY_INFO} attribute, and stores them as
  * subject attributes. Which attributes are being set is determined by the
- * {@link #acceptedAttrIDs}.
+ * {@link #acceptedAttrIDs}. Note that the
+ * <A href="https://twiki.cern.ch/twiki/bin/view/EMI/CommonXACMLProfileV1_1">EMI
+ * Common XACML profile</A> differs from the
+ * <A href="https://edms.cern.ch/document/1058175">EMI XACML Grid Worker Node
+ * Authorization Profile</A> in the way the key-info is sent. This PIP can
+ * handle both flavours.
  * @author Mischa Sall&eacute;, Rens Visser
  */
 public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
@@ -200,30 +205,50 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 
     /**
      * Retrieves the end-entity certificate from a set of (subject)attributes.
+     * Note that the EMI Common XACML Profile (see
+     * https://twiki.cern.ch/twiki/bin/view/EMI/CommonXACMLProfileV1_1) sends a
+     * possibly unordered list of base64 DER-encoded certs instead of a single
+     * PEM-encoded certchain as done by the EMI WN profile
+     * (https://edms.cern.ch/document/1058175/1.0.1)
      * @param attributes (subject) attributes to parse for EEC
      * @return end-entity certificate
      */
     private X509Certificate getCertFromSubject(Set<Attribute> attributes)	{
+	X509Certificate cert = null;
+
 	// Loop over all attributes, looking for ATTR_X509_ISSUER
 	for (Attribute attr: attributes) {
 	    if (attr==null)
 		continue;
 	    if (ATTR_KEY_INFO.equals(attr.getId()))	{
 		Set<Object> attributeValues = attr.getValues();
-		for (Object value: attributeValues)    {
-		    if (value==null)
-			continue;
-		    InputStream pemReader = new ByteArrayInputStream(((String)value).getBytes(StandardCharsets.UTF_8));
-		    try {
-			// Do we need to close pemReader?
-			X509Certificate[] chain = CertificateUtils.loadCertificateChain(pemReader, Encoding.PEM);
-			X509Certificate cert = ProxyUtils.getEndUserCertificate(chain);
+		if (attributeValues==null || attributeValues.size()==0)
+		    continue;
+
+		// Inspect the first value
+		String first = (String)attributeValues.iterator().next();
+		if (!first.startsWith("-----BEGIN "))	{
+		    // assume CommonXACMLProfile: base64 encoded blobs, might
+		    // not be ordered, according to
+		    // https://twiki.cern.ch/twiki/bin/view/EMI/CommonXACMLProfileV1_1
+		    // so combine into PEM string ourselves and let
+		    // loadCertificateChain() sort it for us.
+		    StringBuilder pem = new StringBuilder();
+		    for (Object value: attributeValues)    {
+			pem.append("-----BEGIN CERTIFICATE-----\n");
+			pem.append((String)value);
+			pem.append("\n-----END CERTIFICATE-----\n");
+		    }
+		    if ( (cert = getEEC(pem.toString())) != null)
 			return cert;
-		    } catch (Exception e) {
-			// This might be a IOException, but also for invalid
-			// base64 a StringIndexOutOfBoundsException or a
-			// DecoderException
-			log.error("Parsing value as a certificate failed: "+e.getMessage());
+		} else {
+		    // assume WN profile: single PEM encoded chain. Should also
+		    // be single-valued according to https://edms.cern.ch/document/1058175/1.0.1
+		    if (attributeValues.size() > 1)
+			log.warn("Attribute "+ATTR_KEY_INFO+" has >1 values, but is PEM. Trying all.");
+		    for (Object value: attributeValues)    {
+			if ( (cert = getEEC((String)value)) != null)
+			    return cert;
 		    }
 		}
 	    }
@@ -231,6 +256,27 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 	// No cert found
 	log.info("No valid certificate found in set of attributes");
 	return null;
+    }
+
+    /**
+     * Obtains end-entity certificate from a PEM formatted certificate chain.
+     * @param pemChain input chain
+     * @return X509Certificate end-entity certificate or null on error
+     */
+    private X509Certificate getEEC(String pemChain) {
+	InputStream pemReader = new ByteArrayInputStream(pemChain.getBytes(StandardCharsets.UTF_8));
+	try {
+	    // pemReader is closed by loadCertificateChain()
+	    X509Certificate[] chain = CertificateUtils.loadCertificateChain(pemReader, Encoding.PEM);
+	    X509Certificate cert = ProxyUtils.getEndUserCertificate(chain);
+	    return cert;
+	} catch (Exception e) {
+	    // This might be a IOException, but also for invalid
+	    // base64 a StringIndexOutOfBoundsException or a
+	    // DecoderException
+	    log.error("Parsing value as a certificate failed: "+e.getMessage());
+	    return null;
+	}
     }
 
     /**
