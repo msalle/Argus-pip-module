@@ -37,7 +37,8 @@ import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x509.PolicyInformation;
 
-import org.bouncycastle.asn1.x509.X509Extension;
+//import org.bouncycastle.asn1.x509.X509Extension;
+import org.bouncycastle.asn1.x509.Extension;
 
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
@@ -288,7 +289,8 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 	List<String> oidList = new LazyList<String>();
 
 	// OID for certificate_policies (=2.5.29.32)
-	String certPolicies = X509Extension.certificatePolicies.toString();
+//	String certPolicies = X509Extension.certificatePolicies.toString();
+	String certPolicies = Extension.certificatePolicies.toString();
 
 	// Grab bare extension value from certificate
 	byte[] extvalue = cert.getExtensionValue(certPolicies);
