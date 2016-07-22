@@ -99,6 +99,31 @@ public class X509ExtractorPIPTest {
 	    "xA==\n" +
 	    "-----END CERTIFICATE-----";
 
+    /** Valid certificate without OIDs, base64 DER instead of PEM */
+    private final String Base64Der_Basic1 = 
+	    "MIIBuTCCAWOgAwIBAgIENl1jpTANBgkqhkiG9w0BAQsFADBAMQswCQYDVQQGEwJO\n" +
+	    "TDEQMA4GA1UECgwHRXhhbXBsZTEMMAoGA1UECwwDUERQMREwDwYDVQQDDAhKb2hu\n" +
+	    "IERvZTAeFw0xNjA3MjIwOTM2MzJaFw0xNjA3MjMwOTM2MzJaMFQxCzAJBgNVBAYT\n" +
+	    "Ak5MMRAwDgYDVQQKDAdFeGFtcGxlMQwwCgYDVQQLDANQRFAxETAPBgNVBAMMCEpv\n" +
+	    "aG4gRG9lMRIwEAYDVQQDDAk5MTIwOTAwMjEwXDANBgkqhkiG9w0BAQEFAANLADBI\n" +
+	    "AkEA1LhdT2Rz3dZXDyOaNacQUxnzfjXBJVG0kw8SvLiIhGNJiHCApy6Tq8+Nyn6Y\n" +
+	    "kCU6lCInKbJma4LCUOa2M9bTfQIDAQABozEwLzAOBgNVHQ8BAf8EBAMCBaAwHQYI\n" +
+	    "KwYBBQUHAQ4BAf8EDjAMMAoGCCsGAQUFBxUBMA0GCSqGSIb3DQEBCwUAA0EADWJX\n" +
+	    "zRwHQK2+P4FY4GiKlUgCZybooNdmxLvLU/LgTPNIiq2wp4elNPddGeaSFF7WuwIB\n" +
+	    "GoI96LVXYjBe4oAJYA==\n";
+    
+    private final String Base64Der_Basic2 = 
+	    "MIIB0DCCAXqgAwIBAgIBATANBgkqhkiG9w0BAQsFADA/MQswCQYDVQQGEwJOTDEQ\n" +
+	    "MA4GA1UECgwHRXhhbXBsZTEMMAoGA1UECwwDUERQMRAwDgYDVQQDDAdUZXN0IENB\n" +
+	    "MB4XDTE2MDcyMjA5MzYzMloXDTE3MDcyMjA5MzYzMlowQDELMAkGA1UEBhMCTkwx\n" +
+	    "EDAOBgNVBAoMB0V4YW1wbGUxDDAKBgNVBAsMA1BEUDERMA8GA1UEAwwISm9obiBE\n" +
+	    "b2UwXDANBgkqhkiG9w0BAQEFAANLADBIAkEApgnp1Ft/K7PQ9Vn5itXKQtD3rQgr\n" +
+	    "CcKinZBejCekCjddDol7o7wyg/l39fwy+BpGCAdvFaS8ifYCGkco+S/C/QIDAQAB\n" +
+	    "o2AwXjAMBgNVHRMBAf8EAjAAMA4GA1UdDwEB/wQEAwIEsDAfBgNVHSMEGDAWgBQJ\n" +
+	    "vvNGlM5StPQo6n9IMC02ROLtOjAdBgNVHQ4EFgQUvM8URbacLmge1FRAPZX2OYrO\n" +
+	    "kM0wDQYJKoZIhvcNAQELBQADQQBAjci71TX4K4G4AhA8Top2U99vqjxQ2RPX0/L7\n" +
+	    "xwbuFtBgcWolsp4eH0ZYwp1sMpdc7l3kZBOdA6y4C49ljLe/\n";
+
 
     /**
      * Setup a new {@link X509ExtractorPIP} PIP and set the accepted attributes
@@ -159,6 +184,23 @@ public class X509ExtractorPIPTest {
 	Subject subject= new Subject();
 	Attribute attr = new Attribute("urn:oasis:names:tc:xacml:1.0:subject:key-info");
 	attr.getValues().add(pem);
+	subject.getAttributes().add(attr);
+	request.getSubjects().add(subject);
+        return request;
+    }
+
+    /**
+     * Creates a basic request containing a key-info subject attribute using the
+     * PEM as input
+     * @param cert1,cert2 input strings
+     * @return Request
+     */
+    protected Request createDerRequest(String cert1, String cert2) {
+        Request request= new Request();
+	Subject subject= new Subject();
+	Attribute attr = new Attribute("urn:oasis:names:tc:xacml:1.0:subject:key-info");
+	attr.getValues().add(cert1);
+	attr.getValues().add(cert2);
 	subject.getAttributes().add(attr);
 	request.getSubjects().add(subject);
         return request;
@@ -235,4 +277,25 @@ public class X509ExtractorPIPTest {
 	assertTrue("subject should have 3 attributes, found "+attr.length, attr.length==3);
     }
     
+    /** Test multiple valid Base64 DER (without OIDs) */
+    @Test
+    public void testValidRequestBasicDER() throws Exception {
+	log.info("test valid request using Base64 DER input");
+        Request request= createDerRequest(Base64Der_Basic1, Base64Der_Basic2);
+	boolean result= pip.populateRequest(request);
+	Attribute[] attr = request.getSubjects().toArray(new Subject[0])[0].getAttributes().toArray(new Attribute[0]);
+	assertTrue("populateRequest should have succeeded", result);
+	assertTrue("subject should have 2 attributes, found "+attr.length, attr.length==2);
+    }
+    
+    /** Test multiple valid Base64 DER (without OIDs) */
+    @Test
+    public void testValidRequestBasicDERInverted() throws Exception {
+	log.info("test valid request using Base64 DER input in inverted order");
+        Request request= createDerRequest(Base64Der_Basic2, Base64Der_Basic1);
+	boolean result= pip.populateRequest(request);
+	Attribute[] attr = request.getSubjects().toArray(new Subject[0])[0].getAttributes().toArray(new Attribute[0]);
+	assertTrue("populateRequest should have succeeded", result);
+	assertTrue("subject should have 2 attributes, found "+attr.length, attr.length==2);
+    }
 }

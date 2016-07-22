@@ -215,69 +215,59 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
      * @return end-entity certificate
      */
     private X509Certificate getCertFromSubject(Set<Attribute> attributes)	{
-	X509Certificate cert = null;
+	// Protect against empty set
+	if (attributes==null)
+	    return null;
 
 	// Loop over all attributes, looking for ATTR_X509_ISSUER
 	for (Attribute attr: attributes) {
 	    if (attr==null)
 		continue;
+
 	    if (ATTR_KEY_INFO.equals(attr.getId()))	{
 		Set<Object> attributeValues = attr.getValues();
-		if (attributeValues==null || attributeValues.size()==0)
+		if (attributeValues==null || attributeValues.size()==0)	{
+		    log.warn("Skipping invalid key-info attr: value is empty");
 		    continue;
+		}
 
 		// Inspect the first value
-		String first = (String)attributeValues.iterator().next();
-		if (!first.startsWith("-----BEGIN "))	{
-		    // assume CommonXACMLProfile: base64 encoded blobs, might
-		    // not be ordered, according to
-		    // https://twiki.cern.ch/twiki/bin/view/EMI/CommonXACMLProfileV1_1
-		    // so combine into PEM string ourselves and let
-		    // loadCertificateChain() sort it for us.
-		    StringBuilder pem = new StringBuilder();
-		    for (Object value: attributeValues)    {
-			pem.append("-----BEGIN CERTIFICATE-----\n");
-			pem.append((String)value);
-			pem.append("\n-----END CERTIFICATE-----\n");
-		    }
-		    if ( (cert = getEEC(pem.toString())) != null)
-			return cert;
-		} else {
+		String value = (String)attributeValues.iterator().next();
+		if (value.startsWith("-----BEGIN "))	{
 		    // assume WN profile: single PEM encoded chain. Should also
 		    // be single-valued according to https://edms.cern.ch/document/1058175/1.0.1
 		    if (attributeValues.size() > 1)
-			log.warn("Attribute "+ATTR_KEY_INFO+" has >1 values, but is PEM. Trying all.");
-		    for (Object value: attributeValues)    {
-			if ( (cert = getEEC((String)value)) != null)
-			    return cert;
+			log.warn("key-info attr has >1 values, but is PEM, taking only first value.");
+		} else {
+		    // assume CommonXACMLProfile: base64 encoded blobs, might
+		    // not be ordered, according to
+		    // https://twiki.cern.ch/twiki/bin/view/EMI/CommonXACMLProfileV1_1
+		    // so combine into PEM string ourselves and let canl-java
+		    // loadCertificateChain() sort it for us.
+		    StringBuilder pem = new StringBuilder();
+		    for (Object attrval: attributeValues)    {
+			pem.append("-----BEGIN CERTIFICATE-----\n");
+			pem.append((String)attrval);
+			pem.append("\n-----END CERTIFICATE-----\n");
 		    }
+		    value = pem.toString();
+		}
+		// Now convert PEM-string value to a X509Certificate
+		InputStream pemReader = new ByteArrayInputStream(value.getBytes(StandardCharsets.UTF_8));
+		try {
+		    // pemReader is closed by loadCertificateChain()
+		    X509Certificate[] chain = CertificateUtils.loadCertificateChain(pemReader, Encoding.PEM);
+		    return ProxyUtils.getEndUserCertificate(chain);
+		} catch (Exception e) {
+		    // This might be a IOException, but also for invalid base64
+		    // a StringIndexOutOfBoundsException or a DecoderException
+		    log.error("Skipping invalid key-info attr: Parsing value as a certificate failed: "+e.getMessage());
 		}
 	    }
 	}
 	// No cert found
 	log.info("No valid certificate found in set of attributes");
 	return null;
-    }
-
-    /**
-     * Obtains end-entity certificate from a PEM formatted certificate chain.
-     * @param pemChain input chain
-     * @return X509Certificate end-entity certificate or null on error
-     */
-    private X509Certificate getEEC(String pemChain) {
-	InputStream pemReader = new ByteArrayInputStream(pemChain.getBytes(StandardCharsets.UTF_8));
-	try {
-	    // pemReader is closed by loadCertificateChain()
-	    X509Certificate[] chain = CertificateUtils.loadCertificateChain(pemReader, Encoding.PEM);
-	    X509Certificate cert = ProxyUtils.getEndUserCertificate(chain);
-	    return cert;
-	} catch (Exception e) {
-	    // This might be a IOException, but also for invalid
-	    // base64 a StringIndexOutOfBoundsException or a
-	    // DecoderException
-	    log.error("Parsing value as a certificate failed: "+e.getMessage());
-	    return null;
-	}
     }
 
     /**
