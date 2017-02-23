@@ -1,22 +1,25 @@
-// Copyright (c) FOM-Nikhef 2016-
-// 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// Authors:
-// 2016-
-// Mischa Salle <msalle@nikhef.nl>
-// NIKHEF Amsterdam, the Netherlands
-// <grid-mw-security@nikhef.nl>
+/*
+ * Copyright (c) Members of the EGEE Collaboration. 2006-2010.
+ * See http://www.eu-egee.org/partners/ for details on the copyright holders.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * Authors:
+ * 2016-
+ * Mischa Salle <msalle@nikhef.nl>
+ * NIKHEF Amsterdam, the Netherlands
+ * <grid-mw-security@nikhef.nl>
+ */
 
 package org.glite.authz.pep.pip.provider;
 
@@ -32,6 +35,7 @@ import static org.junit.Assert.*;
 import org.junit.Test;
 import org.junit.Before;
 import org.junit.After;
+import org.hamcrest.CoreMatchers;
 
 /**
  * JUnit framework tests for {@link PolicyNamesPIP}
@@ -61,10 +65,11 @@ public class PolicyNamesPIPTest {
     @After
     public void finalize() throws Exception {
 	log.debug("Stopping PIP");
-	if (pip!=null)
+	if (pip!=null)	{
 	    pip.stop();
-	else
+	} else	{
 	    log.warn("PIP already stopped it seems...");
+	}
     }
 
     /**
@@ -82,9 +87,10 @@ public class PolicyNamesPIPTest {
 	    } catch (PIPProcessingException e) {
 		// expected
 		String message= e.getMessage();
+		assertNotNull("Got a null error message", message);
 		log.debug("EXPECTED: " + message);
 		log.debug("GOT ("+message.indexOf(element)+"): " + element);
-		assertTrue("PIPProcessingException message does not contain: " + element, message.indexOf(element) >= 0);
+		assertThat(message, CoreMatchers.containsString(element));
 	    } catch (Exception e) {
 		e.printStackTrace();
 		fail("must throw only PIPProcessingException: " + e.getMessage());

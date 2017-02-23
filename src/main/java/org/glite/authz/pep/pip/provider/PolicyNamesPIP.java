@@ -1,5 +1,6 @@
 /*
- * Copyright (c) FOM-Nikhef 2016-
+ * Copyright (c) Members of the EGEE Collaboration. 2006-2010.
+ * See http://www.eu-egee.org/partners/ for details on the copyright holders.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +24,7 @@
 
 package org.glite.authz.pep.pip.provider;
 
-import org.glite.authz.pep.pip.provider.policynamespip.PolicyNamesPIPCache;
+import org.glite.authz.pep.pip.provider.policynamespip.UpdatingPolicyNamesCache;
 
 import org.glite.authz.common.model.Request;
 import org.glite.authz.common.model.Subject;
@@ -38,6 +39,8 @@ import java.util.Set;
 import java.io.IOException;
 import java.text.ParseException;
 
+import static java.lang.String.format;
+
 
 /**
  * This PIP searches for all appearances of the issuer of the end-entity
@@ -47,7 +50,7 @@ import java.text.ParseException;
  */
 public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     /** Class logger instance */
-    private final Logger log = LoggerFactory.getLogger(PolicyNamesPIP.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PolicyNamesPIP.class);
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -63,39 +66,17 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     /** Default trust dir ({@value}) */
     public final static String TRUST_DIR = "/etc/grid-security/certificates";
 
-    /** Default time interval (in msec) after which info files cache will be
-     * refreshed ({@value}) */
-    public final static long UPDATEINTERVAL = 6*3600*1000;
-
 
     ////////////////////////////////////////////////////////////////////////
-    // instance variables, settable
+    // instance variables
     ////////////////////////////////////////////////////////////////////////
      
-    /** Time interval (in msec) after which info files cache will be
-     * refreshed, default {@link #UPDATEINTERVAL}.
-     * @see #setUpdateInterval(long) */
-    private long update_interval = UPDATEINTERVAL;
-
-    /** Info file directory (trust dir), default {@link #TRUST_DIR}
-     * @see #setTrustDir(String) */
-    private String trust_dir=TRUST_DIR;
-
     /** Name of attribute set by PIP, default {@link #ATTR_CA_POLICY_NAMES}
      * @see #setAttributeName(String) */
-    private String attribute_name = ATTR_CA_POLICY_NAMES;
+    private String attributeName = ATTR_CA_POLICY_NAMES;
 
-
-    ////////////////////////////////////////////////////////////////////////
-    // instance variables, internal use only
-    ////////////////////////////////////////////////////////////////////////
-    
-    /** Whether we're updating and replacing the {@link PolicyNamesPIPCache} */
-    private boolean updating=false;
-
-    /** Cache of info file directory
-     * @see PolicyNamesPIPCache */
-    private PolicyNamesPIPCache cache = null;
+    /** Contains the cached content of the info files in the trust dir. */
+    private UpdatingPolicyNamesCache policyNamesCache = null;
 
 
     ////////////////////////////////////////////////////////////////////////
@@ -103,72 +84,69 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
     ////////////////////////////////////////////////////////////////////////
      
     /**
-     * Sets the {@link #update_interval} (in msec) after which info files cache
-     * will be reprocessed.
-     * @param msecs number of millisecs between updates
-     * @see #UPDATEINTERVAL
-     */
-    protected void setUpdateInterval(long msecs)    {
-	update_interval=msecs;
-    }
-   
-    /**
      * Sets the output attribute name.
-     * @param attributeName name of attribute set by this PIP
+     * @param name name of attribute set by this PIP
      * @see #ATTR_CA_POLICY_NAMES
      */
-    protected void setAttributeName(String attributeName)    {
-	attribute_name=attributeName;
+    protected void setAttributeName(String name)    {
+	attributeName=name;
     }
 
     /**
-     * Sets the {@link #trust_dir} for this instance, when different from the
-     * current value. In that case it also resets the {@link #cache} since that
-     * is no longer valid. Note that this is not thread-safe.
-     * @param trustDir directory where info files are located.
-     * @see #TRUST_DIR
-     * @throws IOException upon I/O errors in updating the
-     * {@link PolicyNamesPIPCache}
+     * Sets the update interval (in msec) after which info files cache will be
+     * reprocessed.
+     * @param msecs number of millisecs between updates
+     * @see UpdatingPolicyNamesCache#setUpdateInterval(long)
      */
-    protected void setTrustDir(String trustDir) throws IOException    {
-	// If argument is different from current one, update
-	if (trust_dir==null || !trust_dir.equals(trustDir)) {
-	    trust_dir=trustDir;
-	    cache = new PolicyNamesPIPCache(trust_dir);
-	}
+    protected void setUpdateInterval(long msecs)    {
+	policyNamesCache.setUpdateInterval(msecs);
     }
-
+   
     ////////////////////////////////////////////////////////////////////////
     // Constructors
     ////////////////////////////////////////////////////////////////////////
      
     /**
-     * constructor for a {@link PolicyNamesPIP} instance, specifying both the
-     * pipid and the {@link #trust_dir}.
-     * @param pipid ID for this PIP
+     * constructor for a {@link PolicyNamesPIP} instance, specifying the
+     * pipid, the trust dir and the update interval.
+     * @param pipId ID for this PIP
      * @param trustDir directory containing info files
+     * @param updateInterval interval (msec) between info file cache updates
      * @see #PolicyNamesPIP(String)
      * @throws IOException in case of I/O errors
      */
-    public PolicyNamesPIP(String pipid, String trustDir) throws IOException {
-	super(pipid);
-
-	// Set internal trust_dir
-	trust_dir=trustDir;
+    public PolicyNamesPIP(String pipId, String trustDir, long updateInterval) throws IOException {
+	super(pipId);
 
 	// Initialize cache
-	cache = new PolicyNamesPIPCache(trustDir);
+	policyNamesCache = new UpdatingPolicyNamesCache(trustDir, updateInterval);
     }
 
     /**
-     * constructor for a {@link PolicyNamesPIP} instance using default {@link
-     * #TRUST_DIR}.
-     * @param pipid ID for this PIP
+     * constructor for a {@link PolicyNamesPIP} instance, specifying the
+     * pipid and the trust dir, using a default {@link
+     * UpdatingPolicyNamesCache#UPDATEINTERVAL}.
+     * @param pipId ID for this PIP
      * @see #PolicyNamesPIP(String,String)
      * @throws IOException in case of I/O errors
      */
-    public PolicyNamesPIP(String pipid)	throws IOException {
-	this(pipid, TRUST_DIR);
+    public PolicyNamesPIP(String pipId, String trustDir) throws IOException {
+	super(pipId);
+
+	// Initialize cache
+	policyNamesCache = new UpdatingPolicyNamesCache(trustDir);
+    }
+
+    /**
+     * constructor for a {@link PolicyNamesPIP} instance, specifying the
+     * pipid and using the default {@link #TRUST_DIR} and default {@link
+     * UpdatingPolicyNamesCache#UPDATEINTERVAL}.
+     * @param pipId ID for this PIP
+     * @see #PolicyNamesPIP(String,String)
+     * @throws IOException in case of I/O errors
+     */
+    public PolicyNamesPIP(String pipId)	throws IOException {
+	this(pipId, TRUST_DIR);
     }
 
 
@@ -190,19 +168,18 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	throws PIPProcessingException
     {
 	long t0=System.nanoTime();
-	boolean pipprocessed=false;
-	String issuerdn=null;
+	boolean pipProcessed=false;
+	String issuerDn=null;
 
 	// Get all subjects from the request, should be at least one, warn
 	// when there are more than 1
 	Set<Subject> subjects = request.getSubjects();
 	if (subjects.isEmpty())	{
-	    log.error("Request has no subjects");
+	    LOG.error("Request has no subjects");
 	    throw new PIPProcessingException("No subject found in request");
 	}
 	if (subjects.size()>1)
-	    log.warn("Request has "+subjects.size()+
-		     " subjects, taking first match");
+	    LOG.warn("Request has {} subjects, taking first match", subjects.size());
 
 	// Loop over all subjects
 	for (Subject subject : subjects) {
@@ -211,103 +188,59 @@ public class PolicyNamesPIP extends AbstractPolicyInformationPoint {
 	    for (Attribute attr: attributes) {
 		if (ATTR_X509_ISSUER.equals(attr.getId())) {
 		    // Take first value (it should be singlevalued)
-		    Object tmp = attr.getValues().iterator().next();
-		    issuerdn = (tmp!=null ? tmp.toString() : null);
+		    Object x509IssuerAttr = attr.getValues().iterator().next();
+		    issuerDn = (x509IssuerAttr!=null ? x509IssuerAttr.toString() : null);
 		    break;
 		}
 	    }
 
 	    // Did we find the issuer attribute?
-	    if (issuerdn==null)	{
-		log.info("Subject has no or invalid "+ATTR_X509_ISSUER+
-			 " attribute set");
+	    if (issuerDn==null)	{
+		LOG.info("Subject has no or invalid {} attribute set",ATTR_X509_ISSUER);
 		continue;
 	    }
 
-	    // Look for the issuerdn in the .info files
-	    String[] policynames=new String[0];
+	    // Look for the issuerDn in the .info files
+	    String[] policyNames=new String[0];
 	    try {
-		policynames=findSubjectDN(issuerdn);
+		policyNames=policyNamesCache.findIssuerDN(issuerDn);
 	    } catch (IOException e)	{
-		log.error("I/O error reading info files: "+e.getMessage());
-		throw new PIPProcessingException(
-		    "I/O error reading info files: "+e.getMessage());
+		final String errorMsg=format("I/O error reading info files: %s", e.getMessage());
+		LOG.error(errorMsg, e);
+		throw new PIPProcessingException(errorMsg, e);
 	    }
 
 	    // Log total number of matching policies
-	    log.debug("Found "+policynames.length+" matching policies");
+	    if (policyNames.length==1) {
+		LOG.debug("Found {} matching policy", policyNames.length);
+	    } else {
+		LOG.debug("Found {} matching policies", policyNames.length);
+	    }
 
 	    // Check that we found any names
-	    if (policynames.length==0)	{
-		log.info("No matching info file for this subject");
+	    if (policyNames.length==0)	{
+		LOG.info("No matching info file for this subject");
 		continue;
 	    }
 
 	    // Create new attribute and add the policy names
-	    Attribute attr_policynames =
-		new Attribute(attribute_name,
-			      Attribute.DT_STRING);
-	    Set<Object> values = attr_policynames.getValues();
-	    for (int i=0; i<policynames.length; i++)
-		values.add(policynames[i]);
+	    Attribute policyNamesAttr =
+		new Attribute(attributeName, Attribute.DT_STRING);
+	    Set<Object> values = policyNamesAttr.getValues();
+	    for (int i=0; i<policyNames.length; i++)	{
+		values.add(policyNames[i]);
+	    }
 
 	    // Add to the current subject
-	    attributes.add(attr_policynames);
-	    pipprocessed=true;
-	    log.debug("Added attribute \""+attribute_name+"\"");
+	    attributes.add(policyNamesAttr);
+	    pipProcessed=true;
+	    LOG.debug("Added attribute \"{}\"", attributeName);
 	}
 
 	// Log statistics
-	log.debug("PIP parsing took "+(System.nanoTime()-t0)/1000000.0+" msec");
+	LOG.debug("PIP parsing took {} msec", (System.nanoTime()-t0)/1000000.0);
 
 	// Return true when attribute is set
-	return pipprocessed;
-    }
-
-
-    ////////////////////////////////////////////////////////////////////////
-    // Private methods
-    ////////////////////////////////////////////////////////////////////////
-     
-    /**
-     * Tries to find given subjectDN in the info files in {@link #trust_dir}.
-     * @param dn String subject DN to look for
-     * @return array of String with all the matching info files
-     * @throws IOException upon reading errors in updating the
-     * {@link PolicyNamesPIPCache}
-     */
-    private String[] findSubjectDN(String dn) throws IOException   {
-	// Update the cache (when needed)
-	updateCache();
-
-	// Protect against empty cache
-	if (cache == null)
-	    return new String[0];
-
-	return cache.matchIssuerDN(dn);
-    }
-    
-    /**
-     * Update the internal {@link PolicyNamesPIPCache} when needed
-     * @throws IOException upon I/O errors in updating the
-     * {@link PolicyNamesPIPCache}
-     */
-    private void updateCache() throws IOException    {
-	if (updating)
-	    return;
-
-	// set lock: prevent other threads from updating
-	updating=true;
-
-	// Check whether cached list needs updating
-	if (cache.getLifeTime() > update_interval)	{
-	    // Make a new cache, using the old as input
-	    PolicyNamesPIPCache newCache = new PolicyNamesPIPCache(cache);
-	    // Replace the old cache
-	    cache=newCache;
-	}
-	
-	// Unset lock
-	updating=false;
+	return pipProcessed;
     }
 }

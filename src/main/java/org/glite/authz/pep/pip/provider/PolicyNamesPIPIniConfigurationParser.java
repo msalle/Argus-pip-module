@@ -1,5 +1,6 @@
 /*
- * Copyright (c) FOM-Nikhef 2015-
+ * Copyright (c) Members of the EGEE Collaboration. 2006-2010.
+ * See http://www.eu-egee.org/partners/ for details on the copyright holders.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,11 +29,12 @@ import org.glite.authz.common.config.ConfigurationException;
 import org.glite.authz.common.config.IniSectionConfigurationParser;
 import org.glite.authz.pep.pip.PolicyInformationPoint;
 
-import java.io.IOException;
-
 import org.ini4j.Ini;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import static java.lang.String.format;
 
 /**
  * The configuration parser for the PolicyNamesPIP.
@@ -42,7 +44,7 @@ public class PolicyNamesPIPIniConfigurationParser
     implements IniSectionConfigurationParser<PolicyInformationPoint>
 {
     /** Class logger. */
-    private Logger log = LoggerFactory.getLogger( PolicyNamesPIPIniConfigurationParser.class);
+    private static final Logger LOG = LoggerFactory.getLogger( PolicyNamesPIPIniConfigurationParser.class);
 
     /**
      * Name of the {@value} property in ini file which defines the directory
@@ -78,49 +80,53 @@ public class PolicyNamesPIPIniConfigurationParser
     public PolicyInformationPoint parse(Ini.Section iniConfig, AbstractConfigurationBuilder<?> configBuilder)
 		    throws ConfigurationException {
 
-	    long updateinterval_long = -1;
+	    long updateIntervalLong = -1;
 
 	    // Get configuration values
 	    String id = iniConfig.getName();
-	    String trust_dir = iniConfig.get(TRUSTDIR_KEY);
-	    String updateinterval = iniConfig.get(UPDATEINTERVAL_KEY);
+	    String trustDir = iniConfig.get(TRUSTDIR_KEY);
+	    String updateInterval = iniConfig.get(UPDATEINTERVAL_KEY);
 	    String attributeName = iniConfig.get(ATTRIBUTENAME_KEY);
 
-	    // Log trust_dir (if set)
-	    if (trust_dir != null)
-		log.debug("Found "+TRUSTDIR_KEY+" = "+trust_dir);
+	    // Log trustDir (if set)
+	    if (trustDir != null)   {
+		LOG.debug("Found {} = {}", TRUSTDIR_KEY, trustDir);
+	    }
 
-	    // Convert updateinterval to a long (when set)
-	    if (updateinterval != null) {
+	    // Convert updateInterval to a long (when set)
+	    if (updateInterval != null) {
 		try {
-		    updateinterval_long = Integer.parseInt(updateinterval);
+		    updateIntervalLong = Integer.parseInt(updateInterval);
 		} catch (NumberFormatException e)	{
 		    throw new ConfigurationException(
-			"Cannot convert "+UPDATEINTERVAL_KEY+" = "+
-			updateinterval+" to a long");
+			format("Cannot convert %s = %s to a long", UPDATEINTERVAL_KEY, updateInterval));
 		}
-		if (updateinterval_long<=0)
-		    throw new ConfigurationException(UPDATEINTERVAL_KEY+" should be >0");
+		if (updateIntervalLong<=0)  {
+		    throw new ConfigurationException(
+			format("%s should be >0", UPDATEINTERVAL_KEY));
+		}
 	    }
 
 	    // Instantiate PIP
 	    PolicyNamesPIP pip;
 	    try {
-		pip = new PolicyNamesPIP(id, trust_dir);
+		if (updateIntervalLong>0)  {
+		    // Use update interval
+		    LOG.debug("Found {} = {}", UPDATEINTERVAL_KEY, updateIntervalLong);
+		    pip = new PolicyNamesPIP(id, trustDir, updateIntervalLong);
+		} else	{
+		    // Use default update interval
+		    pip = new PolicyNamesPIP(id, trustDir);
+		}
 	    } catch (IOException e) {
-		throw new ConfigurationException(
-		    "Could not instantiate PIP: "+e.getMessage());
+		final String errorMsg = format("Could not instantiate PIP: %s", e.getMessage());
+		LOG.error(errorMsg, e);
+		throw new ConfigurationException(errorMsg, e);
 	    }
 
-	    // Set update interval
-	    if (updateinterval_long>0) {
-		log.debug("Found "+UPDATEINTERVAL_KEY+" = "+updateinterval_long);
-		pip.setUpdateInterval(updateinterval_long);
-	    }
-	    
 	    // Set attribute name
 	    if (attributeName != null)  {
-		log.debug("Found "+ATTRIBUTENAME_KEY+" = "+attributeName);
+		LOG.debug("Found {} = {}", ATTRIBUTENAME_KEY, attributeName);
 		pip.setAttributeName(attributeName);
 	    }
 
