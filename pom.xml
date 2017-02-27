@@ -52,7 +52,7 @@
     <profile>
       <id>old</id>
       <build>
-	<finalName>${project.artifactId}-argus-pepd-162-${project.version}</finalName>
+	<finalName>${project.artifactId}-argus-pepd_162-${project.version}</finalName>
       </build>
       <dependencies>
         <dependency>
