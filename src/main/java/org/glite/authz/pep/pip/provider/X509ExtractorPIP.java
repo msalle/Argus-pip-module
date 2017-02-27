@@ -40,7 +40,9 @@ import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.x509.PolicyInformation;
 
-import org.bouncycastle.asn1.x509.Extension;
+//import org.bouncycastle.asn1.x509.X509Extension;
+//import org.bouncycastle.asn1.x509.Extension;
+import java.lang.reflect.Field;
 
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
@@ -293,7 +295,31 @@ public class X509ExtractorPIP extends AbstractPolicyInformationPoint {
 	List<String> oidList = new LazyList<String>();
 
 	// OID for certificate_policies (=2.5.29.32)
-	String certPolicies = Extension.certificatePolicies.toString();
+//	String certPolicies = Extension.certificatePolicies.toString();
+
+	// Use introspection to be compatible with old BC versions
+	// First get the Extension or X509Extension class
+	Class<?> extension = null;
+	try {
+	    extension = Class.forName("org.bouncycastle.asn1.x509.Extension");
+	} catch (Exception e)	{
+	    try {
+		extension = Class.forName("org.bouncycastle.asn1.x509.X509Extension");
+	    } catch (Exception f)	{
+		LOG.error("Cannot find either Extension or X509Extension class: {}", f.getMessage());
+		return null;
+	    }
+	}
+	// Now get the certificatePolicies field
+	String certPolicies = null;
+	try {
+	    Field field = extension.getField("certificatePolicies");
+	    // Get the certificatePolicies OID
+	    certPolicies = field.get(extension).toString();
+	} catch (Exception e)	{
+	    LOG.error("Cannot find certificatePolicies field: {}", e.getMessage());
+	    return null;
+	}
 
 	// Grab bare extension value from certificate
 	byte[] extvalue = cert.getExtensionValue(certPolicies);

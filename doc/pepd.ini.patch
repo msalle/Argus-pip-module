@@ -1,0 +1,27 @@
+--- a/argus-pep-server/src/main/config/pepd.ini	2017-02-23 21:51:28.000000000 +0100
++++ b/argus-pep-server/src/main/config/pepd.ini	2017-01-12 12:17:03.000000000 +0100
+@@ -29,7 +29,7 @@
+ adminPassword = pepdadmin_password
+ 
+ # PIPs to apply on incoming request
+-pips = REQVALIDATOR_PIP OPENSSLSUBJECT_PIP GLITEXACMLPROFILE_PIP COMMONXACMLPROFILE_PIP
++pips = REQVALIDATOR_PIP OPENSSLSUBJECT_PIP GLITEXACMLPROFILE_PIP COMMONXACMLPROFILE_PIP X509EXTRACT_PIP POLICYNAMES_PIP
+ # OHs to apply on response
+ obligationHandlers = ACCOUNTMAP_OH
+ 
+@@ -68,6 +68,15 @@
+ vomsInfoDir = /etc/grid-security/vomsdir
+ acceptedProfileIDs = http://dci-sec.org/xacml/profile/common-authz/1.1
+ 
++[POLICYNAMES_PIP]
++parserClass = org.glite.authz.pep.pip.provider.PolicyNamesPIPIniConfigurationParser
++trustInfoDir = /etc/grid-security/certificates
++
++[X509EXTRACT_PIP]
++parserClass = org.glite.authz.pep.pip.provider.X509ExtractorPIPIniConfigurationParser
++acceptedAttributeIDs = http://authz-interop.org/xacml/subject/ca-policy-oid http://authz-interop.org/xacml/subject/subject-x509-issuer
++
++
+ #
+ # Obligation Handlers (OH) configuration
+ #

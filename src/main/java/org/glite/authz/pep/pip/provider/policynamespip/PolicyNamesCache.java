@@ -241,10 +241,18 @@ public class PolicyNamesCache {
 	}
 	
 	// Log statistics
-	LOG.debug("Updated list ({}): {} msec ({} info files, {} valid, {} external dep(s), {} copied, {} failed, {} new)",
+/*	LOG.debug("Updated list ({}): {} msec ({} info files, {} valid, {} external dep(s), {} copied, {} failed, {} new)",
 		  trustDir, (System.nanoTime()-t0)/1000000.0,
 		  numInfoFiles, infoEntries.size(), extInfoEntries.size(),
-		  numEntriesCopied, numEntriesFailed, numEntriesNew);
+		  numEntriesCopied, numEntriesFailed, numEntriesNew);*/
+	LOG.debug("Updated list ("+trustDir+"): "+
+		  (System.nanoTime()-t0)/1000000.0+" msec ("+
+		  numInfoFiles+" info files, "+
+		  infoEntries.size()+" valid, "+
+		  extInfoEntries.size()+" external dep(s), "+
+		  numEntriesCopied+" copied, "+
+		  numEntriesFailed+" failed, "+
+		  numEntriesNew+" new)");
     }
 
     /**
